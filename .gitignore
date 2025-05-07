@@ -1,0 +1,28 @@
+# 環境設定
+.env
+.env.*  # 支援 .env.local / .env.production 等
+
+# Node.js 相依套件
+node_modules/
+
+# 編譯產物
+dist/
+build/
+**/build/
+**/dist/
+
+# VSCode 開發環境
+.vscode/
+
+# 日誌檔
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+docker-volume/
+*.local
+
+# OS/IDE 雜項
+.DS_Store
+Thumbs.db
