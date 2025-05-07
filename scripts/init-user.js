@@ -1,25 +1,27 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const User = require('../models/User');
+require("dotenv").config();
+const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const User = require("../models/User");
 
-MONGODB_URI="mongodb://localhost:27017/mini-lab"
+MONGODB_URI = "mongodb://127.0.0.1:27017/mini-lab";
+const id = "leader001";
+const password = "123456";
+const role = "leader";
 mongoose.connect(MONGODB_URI).then(async () => {
-
-  const exist = await User.findOne({ id: 'admin001' });
+  const exist = await User.findOne({ id: id });
   if (exist) {
-    console.log('⚠️ 帳號 admin001 已存在，略過建立');
+    console.log(`⚠️ 帳號 ${id} 已存在，略過建立`);
     process.exit();
   }
-  const hashed = await bcrypt.hash('123456', 10);
+  const hashed = await bcrypt.hash(password, 10);
 
   const user = new User({
-    id: 'admin001',
+    id: id,
     password: hashed,
-    permissions: 'admin',
+    permissions: role,
   });
 
   await user.save();
-  console.log('✅ 測試帳號 admin001 建立完成，密碼為 123456');
+  console.log(`✅ 測試帳號 ${id} 建立完成，密碼為 ${password}`);
   process.exit();
 });
