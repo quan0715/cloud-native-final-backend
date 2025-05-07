@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 const corsOptions = {
-  origin: "http://localhost:5173", // 你的前端來源
+  origin: process.env.FRONTEND_URL, // 你的前端來源
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
   allowedHeaders: "Content-Type,Authorization", // 根據你的需求添加
   preflightContinue: false,
