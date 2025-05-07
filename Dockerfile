@@ -10,4 +10,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "run", "build", "&&", "node", "scripts/init-user.js"]
+CMD ["npm", "run", "build"]
