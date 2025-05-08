@@ -1,5 +1,5 @@
-const { beforeAll, afterEach, afterAll } = require('vitest');
-const mongoose = require('mongoose');
+import { beforeAll, afterEach, afterAll } from 'vitest';
+import mongoose from 'mongoose';
 
 
 beforeAll(async () => {

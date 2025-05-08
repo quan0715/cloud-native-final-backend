@@ -1,9 +1,9 @@
-const { MongoMemoryServer } = require('mongodb-memory-server');
-const mongoose = require('mongoose');
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import * as mongoose from 'mongoose';
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 
-async function globalSetup() {
+export default async function globalSetup() {
   const instance = await MongoMemoryServer.create();
   const uri = instance.getUri();
   global.__MONGOINSTANCE = instance;
@@ -37,7 +37,4 @@ async function createDummyUser() {
 
   await user.save();
   console.log(`✅ 測試帳號 ${id} 建立完成，密碼為 ${password}`);
-  process.exit();
 }
-
-module.exports = globalSetup;
