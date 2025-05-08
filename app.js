@@ -11,18 +11,20 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 const allowedOrigins = [
   "http://localhost:5173", // 您的前端開發環境 (例如 Vue, React, Angular)
+  "http://localhost:8080",
   "https://beta.quan.wtf",
   "https://app.quan.wtf",
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // origin 參數是請求的來源 (例如 'http://localhost:8080')
-    // 如果請求沒有 origin (例如來自 Postman 或 curl 的同源請求)，origin 會是 undefined
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true); // 允許此來源
+    // allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS")); // 拒絕此來源
+      callback(new Error("Not allowed by CORS"));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], // 允許的 HTTP 方法
