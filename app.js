@@ -13,6 +13,7 @@ const allowedOrigins = [
   "http://localhost:5173", // 您的前端開發環境 (例如 Vue, React, Angular)
   "http://localhost:8080",
   "https://beta.quan.wtf",
+  "https://dev.quan.wtf",
   "https://app.quan.wtf",
 ];
 
@@ -32,6 +33,7 @@ const corsOptions = {
   credentials: true, // 如果您需要傳送 cookies 或 authorization headers
 };
 
+app.enable("trust proxy");
 app.use(express.json());
 app.use(cors(corsOptions));
 // connect to MongoDB
@@ -52,3 +54,5 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
+
+app.get("/health", (req, res) => res.sendStatus(204));

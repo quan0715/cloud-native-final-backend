@@ -1,0 +1,31 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.ref_name }}
+    uses: ./.github/workflows/deploy-template.yaml
+    with:
+      branch: ${{ github.ref_name }} # This will be 'main' or 'beta'
+      # For main branch, use the short commit SHA as the tag. For beta, use 'beta' as the tag.
+      tag: "latest"
+      image_name: ghcr.io/${{ github.repository }}
+    secrets:
+      # IMPORTANT: If your beta and main environments use different EC2 hosts or SSH keys,
+      # you will need to set up different secrets in GitHub (e.g., PROD_EC2_HOST, BETA_EC2_HOST)
+      # and then conditionally pass them here based on github.ref_name.
+      # This example assumes they use the same set of secrets for simplicity.
+      deploy_host: ${{ secrets.EC2_HOST }} # Assumes one secret for host, differentiate if needed
+      ec2_user: ${{ secrets.EC2_USER }}
+      ec2_ssh_key: ${{ secrets.EC2_SSH_KEY }}
+      # GITHUB_TOKEN is implicitly passed if the calling workflow has access to it and the called workflow needs it.
+      # For docker/login-action to GHCR, it's typically handled well.
