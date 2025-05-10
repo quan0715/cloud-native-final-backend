@@ -82,7 +82,8 @@ jobs:
             # or that it's configured to pick up the latest pulled image for the service.
             # Using environment variables in docker-compose.yml for the tag is a good practice.
             sudo docker pull ${{ inputs.image_name }}:${{ inputs.tag }}
-
+            echo "🔄 Pruning Docker images"
+            sudo docker image prune -af
             echo "🔄 Restarting services with Docker Compose"
             # Specify your backend service name if you don't want to restart everything (e.g., database)
             # Example: sudo docker compose up -d --remove-orphans --force-recreate your_backend_service_name
