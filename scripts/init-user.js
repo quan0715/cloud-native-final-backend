@@ -5,27 +5,28 @@ const User = require("../models/User");
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
-function initUser({ id, password, role }) {
+function initUser({ userName, password, userRole }) {
   mongoose.connect(MONGODB_URI).then(async () => {
-    const exist = await User.findOne({ id: id });
+    const exist = await User.findOne({ userName });
     if (exist) {
-      console.log(`⚠️ 帳號 ${id} 已存在，略過建立`);
+      console.log(`⚠️ 帳號 ${userName} 已存在，略過建立`);
       process.exit();
     }
+    
     const hashed = await bcrypt.hash(password, 10);
 
     const user = new User({
-      id: id,
-      password: hashed,
-      permissions: role,
+      userName: userName,
+      passwordValidate: hashed,
+      userRole: userRole,
     });
 
     await user.save();
-    console.log(`✅ 測試帳號 ${id} 建立完成，密碼為 ${password}`);
+    console.log(`✅ 測試帳號 ${userName} 建立完成，密碼為 ${password}`);
     process.exit();
   });
 }
 
-initUser({ id: "admin001", password: "123456", role: "admin" });
-initUser({ id: "leader001", password: "123456", role: "leader" });
-initUser({ id: "worker001", password: "123456", role: "worker" });
+initUser({ userName: "admin001", password: "123456", userRole: "admin" });
+initUser({ userName: "leader001", password: "123456", userRole: "leader" });
+initUser({ userName: "worker001", password: "123456", userRole: "worker" });

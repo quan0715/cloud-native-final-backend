@@ -46,7 +46,6 @@ mongoose
 
 // mount routes
 app.use("/auth", require("./routes/auth"));
-app.use("/worker", require("./routes/worker"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.listen(PORT, () => {
