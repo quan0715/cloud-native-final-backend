@@ -26,3 +26,6 @@ docker-volume/
 # OS/IDE 雜項
 .DS_Store
 Thumbs.db
+
+# test coverage files
+coverage/
