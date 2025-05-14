@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      JWT_SECRET: secret-jwt-key
 
     steps:
       - name: Checkout repository
