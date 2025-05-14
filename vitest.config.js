@@ -6,6 +6,9 @@ export default defineConfig({
     environment: 'node',
     globalSetup: './tests/globalSetup.js',
     globalTeardown: './tests/globalTeardown.js',
-    setupFiles: ['./tests/setupFile.js']
+    setupFiles: ['./tests/setupFile.js'],
+    coverage: {
+      reporter: ['text', 'json-summary', 'json']
+    }
   },
 })
