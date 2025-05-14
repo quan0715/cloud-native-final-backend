@@ -46,6 +46,7 @@ mongoose
 
 // mount routes
 app.use("/auth", require("./routes/auth"));
+app.use("/task-types", require("./routes/taskType"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.listen(PORT, () => {
