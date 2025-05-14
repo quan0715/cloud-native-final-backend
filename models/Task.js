@@ -1,19 +1,39 @@
 const mongoose = require('mongoose');
 
-const taskSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  type: {
+const taskDataSchema = new mongoose.Schema({
+  state: {
     type: String,
-    enum: ['temperature', 'electrical', 'physical'],
+    enum: ['draft', 'assigned', 'in-progress', 'success', 'fail'],
     required: true
   },
-  technicianId: { type: String }, // 可選
-  machineId: { type: String },    // 可選
-  status: {
+  assigner_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  machine: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Machine'
+  }],
+  startTime: Date,
+  endTime: Date,
+  message: String
+}, { _id: false });
+
+const taskSchema = new mongoose.Schema({
+  taskTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'TaskType',
+    required: true
+  },
+  taskName: {
     type: String,
-    enum: ['pending', 'in_progress', 'done'],
-    default: 'pending'
-  }
-});
+    required: true
+  },
+  assigner_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  taskData: taskDataSchema
+}, { timestamps: true });
 
 module.exports = mongoose.model('Task', taskSchema);

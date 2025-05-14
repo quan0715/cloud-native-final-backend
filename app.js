@@ -12,6 +12,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const allowedOrigins = [
   "http://localhost:5173", // 您的前端開發環境 (例如 Vue, React, Angular)
   "http://localhost:8080",
+  "http://localhost:3000",
   "https://beta.quan.wtf",
   "https://dev.quan.wtf",
   "https://app.quan.wtf",
@@ -48,11 +49,12 @@ mongoose
 
 // mount routes
 app.use("/auth", require("./routes/auth"));
-app.use("/worker", require("./routes/worker"));
+app.use("/task-types", require("./routes/taskType"));
+app.use("/machines", require("./routes/machine"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
 
-app.get("/health", (req, res) => res.sendStatus(204));
+module.exports = app;

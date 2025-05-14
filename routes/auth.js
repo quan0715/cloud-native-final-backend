@@ -12,7 +12,7 @@ const SECRET = process.env.JWT_SECRET;
  * /auth/login:
  *   post:
  *     summary: 使用者登入
- *     description: 提供帳號密碼，回傳 JWT token 與角色
+ *     description: 提供 userName 和密碼，回傳 JWT token 與角色
  *     tags:
  *       - Auth
  *     requestBody:
@@ -22,7 +22,7 @@ const SECRET = process.env.JWT_SECRET;
  *           schema:
  *             type: object
  *             properties:
- *               id:
+ *               userName:
  *                 type: string
  *                 example: admin001
  *               password:
@@ -48,17 +48,21 @@ const SECRET = process.env.JWT_SECRET;
  *         description: 帳號或密碼錯誤
  */
 router.post('/login', async (req, res) => {
-  const { id, password } = req.body;
-  const user = await User.findOne({ id });
+  const { userName, password } = req.body;
 
-  if (!user) return res.status(401).json({ message: 'User Not Found' });
+  const user = await User.findOne({ userName });
+  if (!user) {
+    return res.status(401).json({ message: 'User Not Found' });
+  }
 
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) return res.status(401).json({ message: 'Password Error' });
+  const valid = await bcrypt.compare(password, user.passwordValidate);
+  if (!valid) {
+    return res.status(401).json({ message: 'Password Error' });
+  }
 
-  const token = jwt.sign({ id: user.id, role: user.permissions }, SECRET, { expiresIn: '1h' });
+  const token = jwt.sign({ id: user._id, role: user.userRole }, SECRET, { expiresIn: '1h' });
 
-  res.json({ token, role: user.permissions, message: 'Login Successful!' });
+  res.json({ token, role: user.userRole, message: 'Login Successful!' });
 });
 
 module.exports = router;
