@@ -6,7 +6,7 @@ const taskDataSchema = new mongoose.Schema({
     enum: ['draft', 'assigned', 'in-progress', 'success', 'fail'],
     required: true
   },
-  assigner_id: {
+  assignee_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
@@ -14,6 +14,7 @@ const taskDataSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Machine'
   }],
+  assignTime: Date,
   startTime: Date,
   endTime: Date,
   message: String
