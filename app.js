@@ -51,6 +51,7 @@ mongoose
 app.use("/auth", require("./routes/auth"));
 app.use("/task-types", require("./routes/taskType"));
 app.use("/machines", require("./routes/machine"));
+app.use("/users", require("./routes/user"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.listen(PORT, () => {
