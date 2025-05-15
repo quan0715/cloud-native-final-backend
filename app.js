@@ -60,7 +60,7 @@ app.use("/auth", require("./routes/auth"));
 app.use("/task-types", require("./routes/taskType"));
 app.use("/machines", require("./routes/machine"));
 app.use("/users", require("./routes/user"));
-//app.use("/tasks", require("./routes/task"));
+app.use("/tasks", require("./routes/task"));
 
 app.use("/api-docs", (req, res, next) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
