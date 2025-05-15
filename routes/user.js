@@ -66,7 +66,7 @@ router.post("/", async (req, res) => {
  * @swagger
  * /users:
  *   get:
- *     summary: 取得所有使用者
+ *     summary: 取得所有使用者（包含技能 user_task_types）
  *     tags: [User]
  *     responses:
  *       200:
@@ -80,20 +80,51 @@ router.post("/", async (req, res) => {
  *                 properties:
  *                   _id:
  *                     type: string
+ *                     example: "665c123..."
+ *                   passwordValidate:
+ *                     type: string
+ *                     example: "$2b$10$xnN2htYqGm1rm7f2X4kBfusl3/O2hXRIkxQkUyb3xnoSvSCvxYiMu"
  *                   userName:
  *                     type: string
+ *                     example: "worker001"
  *                   userRole:
  *                     type: string
+ *                     enum: [admin, leader, worker]
+ *                     example: "worker"
+ *                   user_task_types:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                           example: "664b1c..."
+ *                         taskName:
+ *                           type: string
+ *                           example: "電性測試"
+ *                         number_of_machine:
+ *                           type: integer
+ *                           example: 2
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
  *                   createdAt:
  *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
  */
 router.get("/", async (req, res) => {
-  try {
-    const users = await User.find();
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+      const users = await User.find().populate("user_task_types");
+      res.json(users);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
 });
 
 /**
@@ -167,5 +198,127 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * @swagger
+ * /users/{id}/add-task-type:
+ *   post:
+ *     summary: 為指定使用者新增技能（taskType）
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 使用者 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - taskTypeId
+ *             properties:
+ *               taskTypeId:
+ *                 type: string
+ *                 example: "664b1c..."
+ *     responses:
+ *       200:
+ *         description: 新增技能成功
+ *       400:
+ *         description: taskType 不存在或已經加入過
+ *       404:
+ *         description: 找不到使用者
+ */
+router.post("/:id/add-task-type", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { taskTypeId } = req.body;
+  
+      if (!taskTypeId) {
+        return res.status(400).json({ error: "請提供 taskTypeId" });
+      }
+  
+      const user = await User.findById(id);
+      if (!user) return res.status(404).json({ error: "找不到使用者" });
+  
+      const taskType = await require("../models/TaskType").findById(taskTypeId);
+      if (!taskType) return res.status(400).json({ error: "taskType 不存在" });
+  
+      const alreadyHas = user.user_task_types.includes(taskTypeId);
+      if (alreadyHas) {
+        return res.status(400).json({ error: "該技能已經加入" });
+      }
+  
+      user.user_task_types.push(taskTypeId);
+      await user.save();
+  
+      res.json({ message: "技能新增成功", user });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * @swagger
+ * /users/{id}/remove-task-type:
+ *   delete:
+ *     summary: 移除指定使用者的技能（taskType）
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 使用者 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - taskTypeId
+ *             properties:
+ *               taskTypeId:
+ *                 type: string
+ *                 example: "664b1c..."
+ *     responses:
+ *       200:
+ *         description: 移除技能成功
+ *       400:
+ *         description: taskType 不存在或不在使用者技能列表中
+ *       404:
+ *         description: 找不到使用者
+ */
+router.delete("/:id/remove-task-type", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { taskTypeId } = req.body;
+  
+      if (!taskTypeId) {
+        return res.status(400).json({ error: "請提供 taskTypeId" });
+      }
+  
+      const user = await User.findById(id);
+      if (!user) return res.status(404).json({ error: "找不到使用者" });
+  
+      const index = user.user_task_types.indexOf(taskTypeId);
+      if (index === -1) {
+        return res.status(400).json({ error: "該技能不在使用者技能清單中" });
+      }
+  
+      user.user_task_types.splice(index, 1);
+      await user.save();
+  
+      res.json({ message: "技能已成功移除", user });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+});
+  
 
 module.exports = router;
