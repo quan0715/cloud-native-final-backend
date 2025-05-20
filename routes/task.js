@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
+const User = require("../models/User");
 
 /**
  * @swagger
@@ -427,5 +428,129 @@ router.patch("/:id/fail", async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+/**
+ * @swagger
+ * /tasks/auto-assign-preview:
+ *   post:
+ *     summary: 預覽自動指派所有 draft 任務的執行者
+ *     description: 根據每位 worker 的技能與目前負載預測指派對象，不會實際修改資料庫
+ *     tags: [Task]
+ *     responses:
+ *       200:
+ *         description: 回傳每筆 draft 任務預測會分配給哪位 worker
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   taskId:
+ *                     type: string
+ *                     example: "665f1abc1234567890abc123"
+ *                   taskName:
+ *                     type: string
+ *                     example: "電性測試-001"
+ *                   previewAssignee:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "664b2a9e5f3c3dc7f9e45678"
+ *                       userName:
+ *                         type: string
+ *                         example: "worker001"
+ *       500:
+ *         description: 預覽過程發生伺服器錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 預覽任務指派失敗
+ */
+router.post('/auto-assign-preview', async (req, res) => {
+  try {
+    const draftTasks = await Task.find({ 'taskData.state': 'draft' });
+    const workers = await User.find({ userRole: 'worker' });
+
+    // 取得所有目前已被指派的任務（assigned + in-progress）
+    const activeTasks = await Task.find({
+      'taskData.state': { $in: ['assigned', 'in-progress'] }
+    });
+
+    // 建立一個 workerId -> 預計新增任務數 的 Map
+    const simulatedLoadMap = new Map();
+    workers.forEach(w => simulatedLoadMap.set(String(w._id), 0));
+
+    const previewList = [];
+
+    for (const task of draftTasks) {
+      const taskTypeId = String(task.taskTypeId);
+
+      // 篩選具備該任務技能的 worker
+      const eligibleWorkers = workers.filter(worker =>
+        worker.user_task_types.map(String).includes(taskTypeId)
+      );
+
+      if (eligibleWorkers.length === 0) continue;
+
+      // 對每位候選 worker 建立負載資訊
+      const workerLoadMap = eligibleWorkers.map(worker => {
+        const idStr = String(worker._id);
+
+        const actualLoad = activeTasks.filter(t =>
+          String(t.taskData.assignee_id) === idStr
+        ).length;
+
+        const simulatedLoad = simulatedLoadMap.get(idStr) || 0;
+
+        return {
+          worker,
+          load: actualLoad + simulatedLoad,
+          isSpecialist: worker.user_task_types.length === 1
+        };
+      });
+
+      // 排序規則：技能越單一越優先 → 總負載越少越優先
+      workerLoadMap.sort((a, b) => {
+        if (a.load !== b.load) {
+          return a.load - b.load; // 負載越少越前面
+        }
+        // 如果負載相同，再比較技能單一性
+        if (a.isSpecialist && !b.isSpecialist) return -1;
+        if (!a.isSpecialist && b.isSpecialist) return 1;
+        return 0;
+      });
+
+      const selected = workerLoadMap[0];
+      const selectedIdStr = String(selected.worker._id);
+
+      // 模擬新增任務負載
+      simulatedLoadMap.set(
+        selectedIdStr,
+        simulatedLoadMap.get(selectedIdStr) + 1
+      );
+
+      // 加入 preview 結果
+      previewList.push({
+        taskId: task._id,
+        taskName: task.taskName,
+        previewAssignee: {
+          _id: selected.worker._id,
+          userName: selected.worker.userName
+        }
+      });
+    }
+
+    res.json(previewList);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '預覽任務指派失敗' });
+  }
+});
 
 module.exports = router;
