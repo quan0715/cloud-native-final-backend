@@ -3,6 +3,7 @@ const router = express.Router();
 const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
 const User = require("../models/User");
+const Machine = require('../models/Machine'); 
 
 /**
  * @swagger
@@ -688,6 +689,177 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '刪除任務時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/start-next:
+ *   patch:
+ *     summary: 自動啟動 worker 的下一個可執行任務（分配可用機器）
+ *     tags: [Task]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - workerId
+ *             properties:
+ *               workerId:
+ *                 type: string
+ *                 example: "664b2a9e5f3c3dc7f9e45678"
+ *     responses:
+ *       200:
+ *         description: 任務啟動成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 任務已成功啟動
+ *                 task:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "665f1abc1234567890abc123"
+ *                     taskName:
+ *                       type: string
+ *                       example: "電性測試-001"
+ *                     taskTypeId:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                           example: "6649b2aef5a3c3dc7f9e1234"
+ *                         taskName:
+ *                           type: string
+ *                           example: "電性測試"
+ *                         number_of_machine:
+ *                           type: integer
+ *                           example: 2
+ *                     assigner_id:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         userName:
+ *                           type: string
+ *                     taskData:
+ *                       type: object
+ *                       properties:
+ *                         state:
+ *                           type: string
+ *                           enum: [draft, assigned, in-progress, success, fail]
+ *                           example: in-progress
+ *                         assignee_id:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             userName:
+ *                               type: string
+ *                         machine:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               machineName:
+ *                                 type: string
+ *                         assignTime:
+ *                           type: string
+ *                           format: date-time
+ *                         startTime:
+ *                           type: string
+ *                           format: date-time
+ *                         endTime:
+ *                           type: string
+ *                           format: date-time
+ *                         message:
+ *                           type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: 無可啟動任務或機器不足
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 目前無可啟動的任務（機器不足）
+ *       500:
+ *         description: 系統錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 啟動任務時發生錯誤
+ */
+router.patch('/start-next', async (req, res) => {
+  try {
+    const { workerId } = req.body;
+    if (!workerId) {
+      return res.status(400).json({ error: '請提供 workerId' });
+    }
+
+    const assignedTasks = await Task.find({
+      'taskData.state': 'assigned',
+      'taskData.assignee_id': workerId
+    }).populate('taskTypeId');
+
+    if (assignedTasks.length === 0) {
+      return res.status(400).json({ error: '目前沒有可啟動的任務' });
+    }
+
+    // 依照需要機器數量做降冪排序（多的先做）
+    assignedTasks.sort((a, b) =>
+      b.taskTypeId.number_of_machine - a.taskTypeId.number_of_machine
+    );
+
+    const usedMachineIds = await Task.find({ 'taskData.state': 'in-progress' })
+      .distinct('taskData.machine');
+
+    for (const task of assignedTasks) {
+      const requiredMachineCount = task.taskTypeId.number_of_machine;
+
+      const availableMachines = await Machine.find({
+        _id: { $nin: usedMachineIds },
+        machine_task_types: task.taskTypeId._id
+      }).limit(requiredMachineCount);
+
+      if (availableMachines.length >= requiredMachineCount) {
+        task.taskData.machine = availableMachines.map(m => m._id);
+        task.taskData.state = 'in-progress';
+        task.taskData.startTime = new Date();
+        await task.save();
+
+        return res.status(200).json({
+          message: '任務已成功啟動',
+          task
+        });
+      }
+    }
+
+    return res.status(400).json({ error: '目前無可啟動的任務（機器不足）' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '啟動任務時發生錯誤' });
   }
 });
 
