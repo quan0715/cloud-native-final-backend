@@ -553,4 +553,142 @@ router.post('/auto-assign-preview', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /tasks/auto-assign-confirm:
+ *   patch:
+ *     summary: 確認預覽結果並實際指派 draft 任務（含 assigner）
+ *     tags: [Task]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - assignerId
+ *               - assignments
+ *             properties:
+ *               assignerId:
+ *                 type: string
+ *                 example: "664cdef1234567890abcdef0"
+ *               assignments:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - taskId
+ *                     - assigneeId
+ *                   properties:
+ *                     taskId:
+ *                       type: string
+ *                     assigneeId:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: 指派成功
+ *       400:
+ *         description: 請求格式錯誤
+ *       500:
+ *         description: 伺服器錯誤
+ */
+router.patch('/auto-assign-confirm', async (req, res) => {
+  try {
+    const { assignerId, assignments } = req.body;
+
+    if (!assignerId || !Array.isArray(assignments)) {
+      return res.status(400).json({ error: '請提供 assignerId 與 assignments 陣列' });
+    }
+
+    const results = [];
+
+    for (const { taskId, assigneeId } of assignments) {
+      const task = await Task.findById(taskId);
+      if (!task || task.taskData.state !== 'draft') {
+        results.push({ taskId, status: 'skipped', reason: '任務不存在或非 draft 狀態' });
+        continue;
+      }
+
+      task.assigner_id = assignerId;
+      task.taskData.assignee_id = assigneeId;
+      task.taskData.state = 'assigned';
+      task.taskData.assignTime = new Date();
+      await task.save();
+
+      results.push({ taskId, status: 'assigned', assigneeId });
+    }
+
+    res.json({ message: '任務指派完成', results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '指派過程發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/{id}:
+ *   delete:
+ *     summary: 刪除任務（僅限 draft 狀態）
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: 任務 ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 任務刪除成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 任務已刪除
+ *       400:
+ *         description: 任務不是 draft 狀態，無法刪除
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 只能刪除 draft 狀態的任務
+ *       404:
+ *         description: 找不到任務
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到任務
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await Task.findById(id);
+
+    if (!task) {
+      return res.status(404).json({ error: '找不到任務' });
+    }
+
+    if (task.taskData.state !== 'draft') {
+      return res.status(400).json({ error: '只能刪除 draft 狀態的任務' });
+    }
+
+    await Task.findByIdAndDelete(id);
+    res.json({ message: '任務已刪除' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '刪除任務時發生錯誤' });
+  }
+});
+
 module.exports = router;
