@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const client = require("prom-client");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
@@ -15,6 +16,13 @@ const swaggerOptions = {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
+
+client.collectDefaultMetrics();
+const httpRequestCounter = new client.Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status"]
+});
 
 const allowedOrigins = [
   "http://localhost:5173", // 您的前端開發環境 (例如 Vue, React, Angular)
@@ -45,6 +53,23 @@ const corsOptions = {
 app.enable("trust proxy");
 app.use(express.json());
 app.use(cors(corsOptions));
+
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    httpRequestCounter.inc({
+      method: req.method,
+      route: req.path,
+      status: res.statusCode
+    });
+  });
+  next();
+});
+
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.send(await client.register.metrics());
+});
+
 // connect to MongoDB
 mongoose
   .connect(MONGODB_URI)
