@@ -80,7 +80,7 @@ describe('/machines API', () => {
       .send({ machineName: 'GPU-02', machine_task_types: [newTaskType._id] });
     expect(res.status).toBe(200);
     expect(res.body.machineName).toBe('GPU-02');
-    expect(res.body.machine_task_types[0]).toBe(String(newTaskType._id));
+    expect(res.body.machine_task_types[0]._id).toBe(String(newTaskType._id));
   });
 
   it('should return 404 when updating non-existent machine', async () => {
