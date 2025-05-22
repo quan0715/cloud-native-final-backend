@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
+const User = require("../models/User");
+const Machine = require('../models/Machine'); 
 
 /**
  * @swagger
@@ -427,5 +429,438 @@ router.patch("/:id/fail", async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+/**
+ * @swagger
+ * /tasks/auto-assign-preview:
+ *   post:
+ *     summary: 預覽自動指派所有 draft 任務的執行者
+ *     description: 根據每位 worker 的技能與目前負載預測指派對象，不會實際修改資料庫
+ *     tags: [Task]
+ *     responses:
+ *       200:
+ *         description: 回傳每筆 draft 任務預測會分配給哪位 worker
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   taskId:
+ *                     type: string
+ *                     example: "665f1abc1234567890abc123"
+ *                   taskName:
+ *                     type: string
+ *                     example: "電性測試-001"
+ *                   previewAssignee:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "664b2a9e5f3c3dc7f9e45678"
+ *                       userName:
+ *                         type: string
+ *                         example: "worker001"
+ *       500:
+ *         description: 預覽過程發生伺服器錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 預覽任務指派失敗
+ */
+router.post('/auto-assign-preview', async (req, res) => {
+  try {
+    const draftTasks = await Task.find({ 'taskData.state': 'draft' });
+    const workers = await User.find({ userRole: 'worker' });
+
+    // 取得所有目前已被指派的任務（assigned + in-progress）
+    const activeTasks = await Task.find({
+      'taskData.state': { $in: ['assigned', 'in-progress'] }
+    });
+
+    // 建立一個 workerId -> 預計新增任務數 的 Map
+    const simulatedLoadMap = new Map();
+    workers.forEach(w => simulatedLoadMap.set(String(w._id), 0));
+
+    const previewList = [];
+
+    for (const task of draftTasks) {
+      const taskTypeId = String(task.taskTypeId);
+
+      // 篩選具備該任務技能的 worker
+      const eligibleWorkers = workers.filter(worker =>
+        worker.user_task_types.map(String).includes(taskTypeId)
+      );
+
+      if (eligibleWorkers.length === 0) continue;
+
+      // 對每位候選 worker 建立負載資訊
+      const workerLoadMap = eligibleWorkers.map(worker => {
+        const idStr = String(worker._id);
+
+        const actualLoad = activeTasks.filter(t =>
+          String(t.taskData.assignee_id) === idStr
+        ).length;
+
+        const simulatedLoad = simulatedLoadMap.get(idStr) || 0;
+
+        return {
+          worker,
+          load: actualLoad + simulatedLoad,
+          isSpecialist: worker.user_task_types.length === 1
+        };
+      });
+
+      // 排序規則：技能越單一越優先 → 總負載越少越優先
+      workerLoadMap.sort((a, b) => {
+        if (a.load !== b.load) {
+          return a.load - b.load; // 負載越少越前面
+        }
+        // 如果負載相同，再比較技能單一性
+        if (a.isSpecialist && !b.isSpecialist) return -1;
+        if (!a.isSpecialist && b.isSpecialist) return 1;
+        return 0;
+      });
+
+      const selected = workerLoadMap[0];
+      const selectedIdStr = String(selected.worker._id);
+
+      // 模擬新增任務負載
+      simulatedLoadMap.set(
+        selectedIdStr,
+        simulatedLoadMap.get(selectedIdStr) + 1
+      );
+
+      // 加入 preview 結果
+      previewList.push({
+        taskId: task._id,
+        taskName: task.taskName,
+        previewAssignee: {
+          _id: selected.worker._id,
+          userName: selected.worker.userName
+        }
+      });
+    }
+
+    res.json(previewList);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '預覽任務指派失敗' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/auto-assign-confirm:
+ *   patch:
+ *     summary: 確認預覽結果並實際指派 draft 任務（含 assigner）
+ *     tags: [Task]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - assignerId
+ *               - assignments
+ *             properties:
+ *               assignerId:
+ *                 type: string
+ *                 example: "664cdef1234567890abcdef0"
+ *               assignments:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - taskId
+ *                     - assigneeId
+ *                   properties:
+ *                     taskId:
+ *                       type: string
+ *                     assigneeId:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: 指派成功
+ *       400:
+ *         description: 請求格式錯誤
+ *       500:
+ *         description: 伺服器錯誤
+ */
+router.patch('/auto-assign-confirm', async (req, res) => {
+  try {
+    const { assignerId, assignments } = req.body;
+
+    if (!assignerId || !Array.isArray(assignments)) {
+      return res.status(400).json({ error: '請提供 assignerId 與 assignments 陣列' });
+    }
+
+    const results = [];
+
+    for (const { taskId, assigneeId } of assignments) {
+      const task = await Task.findById(taskId);
+      if (!task || task.taskData.state !== 'draft') {
+        results.push({ taskId, status: 'skipped', reason: '任務不存在或非 draft 狀態' });
+        continue;
+      }
+
+      task.assigner_id = assignerId;
+      task.taskData.assignee_id = assigneeId;
+      task.taskData.state = 'assigned';
+      task.taskData.assignTime = new Date();
+      await task.save();
+
+      results.push({ taskId, status: 'assigned', assigneeId });
+    }
+
+    res.json({ message: '任務指派完成', results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '指派過程發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/{id}:
+ *   delete:
+ *     summary: 刪除任務（僅限 draft 狀態）
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: 任務 ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 任務刪除成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 任務已刪除
+ *       400:
+ *         description: 任務不是 draft 狀態，無法刪除
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 只能刪除 draft 狀態的任務
+ *       404:
+ *         description: 找不到任務
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到任務
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await Task.findById(id);
+
+    if (!task) {
+      return res.status(404).json({ error: '找不到任務' });
+    }
+
+    if (task.taskData.state !== 'draft') {
+      return res.status(400).json({ error: '只能刪除 draft 狀態的任務' });
+    }
+
+    await Task.findByIdAndDelete(id);
+    res.json({ message: '任務已刪除' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '刪除任務時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/start-next:
+ *   patch:
+ *     summary: 自動啟動 worker 的下一個可執行任務（分配可用機器）
+ *     tags: [Task]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - workerId
+ *             properties:
+ *               workerId:
+ *                 type: string
+ *                 example: "664b2a9e5f3c3dc7f9e45678"
+ *     responses:
+ *       200:
+ *         description: 任務啟動成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 任務已成功啟動
+ *                 task:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "665f1abc1234567890abc123"
+ *                     taskName:
+ *                       type: string
+ *                       example: "電性測試-001"
+ *                     taskTypeId:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                           example: "6649b2aef5a3c3dc7f9e1234"
+ *                         taskName:
+ *                           type: string
+ *                           example: "電性測試"
+ *                         number_of_machine:
+ *                           type: integer
+ *                           example: 2
+ *                     assigner_id:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         userName:
+ *                           type: string
+ *                     taskData:
+ *                       type: object
+ *                       properties:
+ *                         state:
+ *                           type: string
+ *                           enum: [draft, assigned, in-progress, success, fail]
+ *                           example: in-progress
+ *                         assignee_id:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             userName:
+ *                               type: string
+ *                         machine:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               machineName:
+ *                                 type: string
+ *                         assignTime:
+ *                           type: string
+ *                           format: date-time
+ *                         startTime:
+ *                           type: string
+ *                           format: date-time
+ *                         endTime:
+ *                           type: string
+ *                           format: date-time
+ *                         message:
+ *                           type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: 無可啟動任務或機器不足
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 目前無可啟動的任務（機器不足）
+ *       500:
+ *         description: 系統錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 啟動任務時發生錯誤
+ */
+router.patch('/start-next', async (req, res) => {
+  try {
+    const { workerId } = req.body;
+    if (!workerId) {
+      return res.status(400).json({ error: '請提供 workerId' });
+    }
+
+    const assignedTasks = await Task.find({
+      'taskData.state': 'assigned',
+      'taskData.assignee_id': workerId
+    }).populate('taskTypeId');
+
+    if (assignedTasks.length === 0) {
+      return res.status(400).json({ error: '目前沒有可啟動的任務' });
+    }
+
+    // 依照需要機器數量做降冪排序（多的先做）
+    assignedTasks.sort((a, b) =>
+      b.taskTypeId.number_of_machine - a.taskTypeId.number_of_machine
+    );
+
+    const usedMachineIds = await Task.find({ 'taskData.state': 'in-progress' })
+      .distinct('taskData.machine');
+
+    for (const task of assignedTasks) {
+      const requiredMachineCount = task.taskTypeId.number_of_machine;
+
+      const availableMachines = await Machine.find({
+        _id: { $nin: usedMachineIds },
+        machine_task_types: task.taskTypeId._id
+      }).limit(requiredMachineCount);
+
+      if (availableMachines.length >= requiredMachineCount) {
+        task.taskData.machine = availableMachines.map(m => m._id);
+        task.taskData.state = 'in-progress';
+        task.taskData.startTime = new Date();
+        await task.save();
+
+        return res.status(200).json({
+          message: '任務已成功啟動',
+          task
+        });
+      }
+    }
+
+    return res.status(400).json({ error: '目前無可啟動的任務（機器不足）' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '啟動任務時發生錯誤' });
+  }
+});
 
 module.exports = router;
