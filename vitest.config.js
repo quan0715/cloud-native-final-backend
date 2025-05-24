@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ['./tests/setupFile.js'],
     coverage: {
       reporter: ['text', 'json-summary', 'json']
-    }
+    },
+    fileParallelism: false,
   },
 })
