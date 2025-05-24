@@ -22,10 +22,6 @@ describe('/machines API', () => {
     });
   });
 
-  afterEach(async () => {
-    await clearDB();
-  });
-
   it('should create a machine', async () => {
     const res = await request(app)
       .post('/machines')
