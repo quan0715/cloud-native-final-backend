@@ -1,6 +1,7 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import * as mongoose from 'mongoose';
-import User from '../models/User';
+// import User from '../models/User';
+const User = require('../models/User');
 import bcrypt from 'bcrypt';
 
 export default async function globalSetup() {
@@ -11,7 +12,7 @@ export default async function globalSetup() {
   process.env.MONGODB_URI = uri + 'mini-lab'
   const conn = await mongoose.connect(process.env.MONGODB_URI);
   await conn.connection.db.dropDatabase();
-  await setupDB();
+  // await setupDB();
   await mongoose.disconnect();
 };
 
@@ -21,7 +22,7 @@ async function setupDB() {
   await initUser({ userName: "worker001", password: "123456", userRole: "worker" });
 }
 
-async function initUser({ userName, password, userRole }) {
+export async function initUser({ userName, password, userRole }) {
   const exist = await User.findOne({ userName });
   if (exist) {
     console.log(`⚠️ 帳號 ${userName} 已存在，略過建立`);
@@ -38,4 +39,5 @@ async function initUser({ userName, password, userRole }) {
 
   await user.save();
   console.log(`✅ 測試帳號 ${userName} 建立完成，密碼為 ${password}`);
+  return user;
 }

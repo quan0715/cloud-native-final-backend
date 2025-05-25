@@ -1,8 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import app from '../app' // Assuming your Express app is exported from app.js
+const User = require('../models/User');
+import { initUser } from './globalSetup';
 
 describe('Login API', () => {
+  beforeEach(async () => {
+    await User.deleteMany({});
+    await initUser({ userName: 'leader001', password: '123456', userRole: 'leader' });
+    await initUser({ userName: 'admin001', password: '123456', userRole: 'admin' });
+    await initUser({ userName: 'worker001', password: '123456', userRole: 'worker' });
+  });
   describe('POST /auth/login', () => {
     it('should return 200 when valid credentials are provided', async () => {
       const validCredentials = {
