@@ -881,4 +881,205 @@ router.patch('/start-next', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /tasks/draft:
+ *   get:
+ *     summary: 取得所有 draft 狀態的任務（含任務類型、指派者與執行者）
+ *     tags: [Task]
+ *     responses:
+ *       200:
+ *         description: 回傳 draft 任務列表
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     example: "665f1abc1234567890abc123"
+ *                   taskName:
+ *                     type: string
+ *                     example: "電性測試-001"
+ *                   taskTypeId:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "6649b2aef5a3c3dc7f9e1234"
+ *                       taskName:
+ *                         type: string
+ *                         example: "電性測試"
+ *                       number_of_machine:
+ *                         type: integer
+ *                         example: 1
+ *                   assigner_id:
+ *                     type: object
+ *                     nullable: true
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       userName:
+ *                         type: string
+ *                   taskData:
+ *                     type: object
+ *                     properties:
+ *                       state:
+ *                         type: string
+ *                         enum: [draft]
+ *                         example: draft
+ *                       assignee_id:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                       machine:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             machineName:
+ *                               type: string
+ *                       assignTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       startTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       endTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       message:
+ *                         type: string
+ *                         example: ""
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
+ *       500:
+ *         description: 查詢過程發生錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 查詢 draft 任務時發生錯誤
+ */
+router.get('/draft', async (req, res) => {
+  try {
+    const draftTasks = await Task.find({ 'taskData.state': 'draft' })
+      .populate('taskTypeId')
+      .populate('assigner_id', 'userName')
+      .populate('taskData.assignee_id', 'userName')
+      .populate('taskData.machine', 'machineName');
+
+    res.status(200).json(draftTasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢 draft 任務時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/week-load/{userId}:
+ *   get:
+ *     summary: 查詢指定使用者本週被指派的任務數量與詳細資訊
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         description: 使用者 ID（worker）
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 查詢成功，回傳任務數量與任務清單
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: integer
+ *                   example: 1
+ *                 tasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       taskId:
+ *                         type: string
+ *                         example: "665f1abc1234567890abc123"
+ *                       taskName:
+ *                         type: string
+ *                         example: "電性測試-001"
+ *                       state:
+ *                         type: string
+ *                         example: "assigned"
+ *                       assignTime:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-05-26T10:15:00.000Z"
+ *       404:
+ *         description: 找不到使用者
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到使用者
+ *       500:
+ *         description: 查詢過程發生錯誤
+ */
+router.get('/week-load/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: '找不到使用者' });
+    }
+
+    const { monday, sunday } = getWeekRange();
+
+    const tasks = await Task.find({
+      'taskData.assignee_id': userId,
+      'taskData.assignTime': { $gte: monday, $lte: sunday }
+    });
+
+    const result = {
+      count: tasks.length,
+      tasks: tasks.map(task => ({
+        taskId: task._id,
+        taskName: task.taskName,
+        state: task.taskData.state,
+        assignTime: task.taskData.assignTime
+      }))
+    };
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢過程發生錯誤' });
+  }
+});
+
 module.exports = router;
