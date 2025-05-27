@@ -63,6 +63,19 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Sync configuration files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.deploy_host }}
+          username: ${{ secrets.ec2_user }}
+          key: ${{ secrets.ec2_ssh_key }}
+          source: "docker-compose.yml,observability/"
+          target: "~/app/"
+          strip_components: 0
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -74,28 +87,44 @@ jobs:
             echo "🔑 Logged in as $(whoami) on host $(hostname)"
             echo "🚀 Starting deployment for image: ${{ inputs.image_name }}:${{ inputs.tag }}"
 
-            # Navigate to your app directory on the EC2 instance if docker-compose.yml is not in the home directory
-            # Example: cd /srv/my-app || exit 1
+            # Navigate to your app directory (adjust path as needed)
+            cd ~/app || { echo "❌ App directory not found"; exit 1; }
 
-            echo "🐳 Pulling Docker image: ${{ inputs.image_name }}:${{ inputs.tag }}"
-            # Ensure your docker-compose.yml on EC2 uses this specific image and tag,
-            # or that it's configured to pick up the latest pulled image for the service.
-            # Using environment variables in docker-compose.yml for the tag is a good practice.
-            sudo docker pull ${{ inputs.image_name }}:${{ inputs.tag }}
-            echo "🔄 Pruning Docker images"
-            sudo docker image prune -af
-            echo "🔄 Restarting services with Docker Compose"
-            # Specify your backend service name if you don't want to restart everything (e.g., database)
-            # Example: sudo docker compose up -d --remove-orphans --force-recreate your_backend_service_name
-            # Assuming docker-compose.yml is in the current directory after cd (if any)
-            # Or provide the full path: sudo docker compose -f /path/to/your/docker-compose.yml up ...
-            sudo docker compose up -d --remove-orphans --force-recreate # Be cautious if this restarts databases
+            # Verify configuration files are synced
+            echo "📁 Verifying configuration files"
+            ls -la docker-compose.yml
+            ls -la observability/
 
+            # Login to GitHub Container Registry to pull private images
+            echo "🔐 Logging into GitHub Container Registry"
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Gracefully stop only the backend service
+            echo "⏹️ Stopping backend service"
+            sudo docker compose stop backend || echo "⚠️ Backend service was not running"
+
+            # Remove the old backend container to ensure new image is used
+            echo "🗑️ Removing old backend container"
+            sudo docker compose rm -f backend || echo "⚠️ No backend container to remove"
+
+            # Start the backend service with new image (Docker Compose will pull automatically)
+            echo "🚀 Starting backend service with new image"
+            sudo docker compose up -d --pull always backend
+
+            # Clean up old images to save disk space
+            echo "🧹 Cleaning up old Docker images"
+            sudo docker image prune -f
+
+            # Restart cloudflared if it exists
             if sudo systemctl status cloudflared &> /dev/null; then
               echo "🔄 Restarting cloudflared service"
               sudo systemctl restart cloudflared
             else
-              echo "⚠️ cloudflared service not found or not active, skipping restart."
+              echo "ℹ️ Cloudflared service not found, skipping restart"
             fi
 
-            echo "✅ Deployment finished successfully!"
+            # Final status check
+            echo "📊 Deployment status:"
+            sudo docker compose ps
+
+            echo "✅ Deployment completed successfully!"
