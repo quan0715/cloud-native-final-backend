@@ -430,6 +430,23 @@ router.patch("/:id/fail", async (req, res) => {
     }
   });
 
+// Helper: 取得本週一至週日時間範圍
+const getWeekRange = () => {
+  const now = new Date();
+  const day = now.getDay(); // Sunday = 0, Monday = 1
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  return { monday, sunday };
+};
+
 /**
  * @swagger
  * /tasks/auto-assign-preview:
@@ -478,12 +495,23 @@ router.post('/auto-assign-preview', async (req, res) => {
     const draftTasks = await Task.find({ 'taskData.state': 'draft' });
     const workers = await User.find({ userRole: 'worker' });
 
-    // 取得所有目前已被指派的任務（assigned + in-progress）
-    const activeTasks = await Task.find({
-      'taskData.state': { $in: ['assigned', 'in-progress'] }
+    const { monday, sunday } = getWeekRange();
+
+    // 取得本週 assignTime 落在範圍內的任務
+    const weeklyTasks = await Task.find({
+      'taskData.assignTime': { $gte: monday, $lte: sunday },
+      'taskData.assignee_id': { $ne: null }
     });
 
-    // 建立一個 workerId -> 預計新增任務數 的 Map
+    // 建立一個 workerId -> 本週已分配任務數
+    const actualWeeklyLoadMap = new Map();
+    workers.forEach(w => actualWeeklyLoadMap.set(String(w._id), 0));
+    for (const task of weeklyTasks) {
+      const wid = String(task.taskData.assignee_id);
+      actualWeeklyLoadMap.set(wid, (actualWeeklyLoadMap.get(wid) || 0) + 1);
+    }
+
+    // 模擬本次指派後的負載
     const simulatedLoadMap = new Map();
     workers.forEach(w => simulatedLoadMap.set(String(w._id), 0));
 
@@ -492,21 +520,17 @@ router.post('/auto-assign-preview', async (req, res) => {
     for (const task of draftTasks) {
       const taskTypeId = String(task.taskTypeId);
 
-      // 篩選具備該任務技能的 worker
+      // 找出符合此任務技能的 worker
       const eligibleWorkers = workers.filter(worker =>
         worker.user_task_types.map(String).includes(taskTypeId)
       );
 
       if (eligibleWorkers.length === 0) continue;
 
-      // 對每位候選 worker 建立負載資訊
+      // 建立 worker 負載清單
       const workerLoadMap = eligibleWorkers.map(worker => {
         const idStr = String(worker._id);
-
-        const actualLoad = activeTasks.filter(t =>
-          String(t.taskData.assignee_id) === idStr
-        ).length;
-
+        const actualLoad = actualWeeklyLoadMap.get(idStr) || 0;
         const simulatedLoad = simulatedLoadMap.get(idStr) || 0;
 
         return {
@@ -516,12 +540,9 @@ router.post('/auto-assign-preview', async (req, res) => {
         };
       });
 
-      // 排序規則：技能越單一越優先 → 總負載越少越優先
+      // 排序：1. 負載少 → 2. 專才優先
       workerLoadMap.sort((a, b) => {
-        if (a.load !== b.load) {
-          return a.load - b.load; // 負載越少越前面
-        }
-        // 如果負載相同，再比較技能單一性
+        if (a.load !== b.load) return a.load - b.load;
         if (a.isSpecialist && !b.isSpecialist) return -1;
         if (!a.isSpecialist && b.isSpecialist) return 1;
         return 0;
@@ -530,13 +551,10 @@ router.post('/auto-assign-preview', async (req, res) => {
       const selected = workerLoadMap[0];
       const selectedIdStr = String(selected.worker._id);
 
-      // 模擬新增任務負載
-      simulatedLoadMap.set(
-        selectedIdStr,
-        simulatedLoadMap.get(selectedIdStr) + 1
-      );
+      // 模擬新增一個任務負載
+      simulatedLoadMap.set(selectedIdStr, simulatedLoadMap.get(selectedIdStr) + 1);
 
-      // 加入 preview 結果
+      // 加入預覽結果
       previewList.push({
         taskId: task._id,
         taskName: task.taskName,
@@ -818,6 +836,16 @@ router.patch('/start-next', async (req, res) => {
       return res.status(400).json({ error: '請提供 workerId' });
     }
 
+    // 先檢查是否已有正在進行中的任務
+    const currentTask = await Task.findOne({
+      'taskData.state': 'in-progress',
+      'taskData.assignee_id': workerId
+    });
+
+    if (currentTask) {
+      return res.status(400).json({ error: '該使用者已有進行中的任務，無法啟動新任務' });
+    }
+
     const assignedTasks = await Task.find({
       'taskData.state': 'assigned',
       'taskData.assignee_id': workerId
@@ -860,6 +888,207 @@ router.patch('/start-next', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '啟動任務時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/draft:
+ *   get:
+ *     summary: 取得所有 draft 狀態的任務（含任務類型、指派者與執行者）
+ *     tags: [Task]
+ *     responses:
+ *       200:
+ *         description: 回傳 draft 任務列表
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     example: "665f1abc1234567890abc123"
+ *                   taskName:
+ *                     type: string
+ *                     example: "電性測試-001"
+ *                   taskTypeId:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "6649b2aef5a3c3dc7f9e1234"
+ *                       taskName:
+ *                         type: string
+ *                         example: "電性測試"
+ *                       number_of_machine:
+ *                         type: integer
+ *                         example: 1
+ *                   assigner_id:
+ *                     type: object
+ *                     nullable: true
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       userName:
+ *                         type: string
+ *                   taskData:
+ *                     type: object
+ *                     properties:
+ *                       state:
+ *                         type: string
+ *                         enum: [draft]
+ *                         example: draft
+ *                       assignee_id:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                       machine:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             machineName:
+ *                               type: string
+ *                       assignTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       startTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       endTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       message:
+ *                         type: string
+ *                         example: ""
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
+ *       500:
+ *         description: 查詢過程發生錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 查詢 draft 任務時發生錯誤
+ */
+router.get('/draft', async (req, res) => {
+  try {
+    const draftTasks = await Task.find({ 'taskData.state': 'draft' })
+      .populate('taskTypeId')
+      .populate('assigner_id', 'userName')
+      .populate('taskData.assignee_id', 'userName')
+      .populate('taskData.machine', 'machineName');
+
+    res.status(200).json(draftTasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢 draft 任務時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/week-load/{userId}:
+ *   get:
+ *     summary: 查詢指定使用者本週被指派的任務數量與詳細資訊
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         description: 使用者 ID（worker）
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 查詢成功，回傳任務數量與任務清單
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: integer
+ *                   example: 1
+ *                 tasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       taskId:
+ *                         type: string
+ *                         example: "665f1abc1234567890abc123"
+ *                       taskName:
+ *                         type: string
+ *                         example: "電性測試-001"
+ *                       state:
+ *                         type: string
+ *                         example: "assigned"
+ *                       assignTime:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-05-26T10:15:00.000Z"
+ *       404:
+ *         description: 找不到使用者
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到使用者
+ *       500:
+ *         description: 查詢過程發生錯誤
+ */
+router.get('/week-load/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: '找不到使用者' });
+    }
+
+    const { monday, sunday } = getWeekRange();
+
+    const tasks = await Task.find({
+      'taskData.assignee_id': userId,
+      'taskData.assignTime': { $gte: monday, $lte: sunday }
+    });
+
+    const result = {
+      count: tasks.length,
+      tasks: tasks.map(task => ({
+        taskId: task._id,
+        taskName: task.taskName,
+        state: task.taskData.state,
+        assignTime: task.taskData.assignTime
+      }))
+    };
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢過程發生錯誤' });
   }
 });
 
