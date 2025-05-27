@@ -95,36 +95,13 @@ jobs:
             ls -la docker-compose.yml
             ls -la observability/
 
-            # Login to GitHub Container Registry to pull private images
-            echo "🔐 Logging into GitHub Container Registry"
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Gracefully stop only the backend service
-            echo "⏹️ Stopping backend service"
-            sudo docker compose stop backend || echo "⚠️ Backend service was not running"
-
-            # Remove the old backend container to ensure new image is used
-            echo "🗑️ Removing old backend container"
-            sudo docker compose rm -f backend || echo "⚠️ No backend container to remove"
-
-            # Start the backend service with new image (Docker Compose will pull automatically)
-            echo "🚀 Starting backend service with new image"
-            sudo docker compose up -d --pull always backend
-
-            # Clean up old images to save disk space
-            echo "🧹 Cleaning up old Docker images"
-            sudo docker image prune -f
-
-            # Restart cloudflared if it exists
-            if sudo systemctl status cloudflared &> /dev/null; then
-              echo "🔄 Restarting cloudflared service"
-              sudo systemctl restart cloudflared
-            else
-              echo "ℹ️ Cloudflared service not found, skipping restart"
-            fi
-
-            # Final status check
-            echo "📊 Deployment status:"
-            sudo docker compose ps
+            set -e
+            echo "👉 拉${{ inputs.tag }}映像"
+            sudo docker compose up --pull always -d --remove-orphans
+            echo "👉 重啟服務（不中斷）"
+            echo "🔄 Pruning Docker images"
+            sudo docker image prune -af
+            echo "👉 重啟 cloudflared，讓新容器立即被代理"
+            sudo systemctl restart cloudflared
 
             echo "✅ Deployment completed successfully!"
