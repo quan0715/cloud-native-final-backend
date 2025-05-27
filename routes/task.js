@@ -430,6 +430,23 @@ router.patch("/:id/fail", async (req, res) => {
     }
   });
 
+// Helper: 取得本週一至週日時間範圍
+const getWeekRange = () => {
+  const now = new Date();
+  const day = now.getDay(); // Sunday = 0, Monday = 1
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  return { monday, sunday };
+};
+
 /**
  * @swagger
  * /tasks/auto-assign-preview:
@@ -478,12 +495,23 @@ router.post('/auto-assign-preview', async (req, res) => {
     const draftTasks = await Task.find({ 'taskData.state': 'draft' });
     const workers = await User.find({ userRole: 'worker' });
 
-    // 取得所有目前已被指派的任務（assigned + in-progress）
-    const activeTasks = await Task.find({
-      'taskData.state': { $in: ['assigned', 'in-progress'] }
+    const { monday, sunday } = getWeekRange();
+
+    // 取得本週 assignTime 落在範圍內的任務
+    const weeklyTasks = await Task.find({
+      'taskData.assignTime': { $gte: monday, $lte: sunday },
+      'taskData.assignee_id': { $ne: null }
     });
 
-    // 建立一個 workerId -> 預計新增任務數 的 Map
+    // 建立一個 workerId -> 本週已分配任務數
+    const actualWeeklyLoadMap = new Map();
+    workers.forEach(w => actualWeeklyLoadMap.set(String(w._id), 0));
+    for (const task of weeklyTasks) {
+      const wid = String(task.taskData.assignee_id);
+      actualWeeklyLoadMap.set(wid, (actualWeeklyLoadMap.get(wid) || 0) + 1);
+    }
+
+    // 模擬本次指派後的負載
     const simulatedLoadMap = new Map();
     workers.forEach(w => simulatedLoadMap.set(String(w._id), 0));
 
@@ -492,21 +520,17 @@ router.post('/auto-assign-preview', async (req, res) => {
     for (const task of draftTasks) {
       const taskTypeId = String(task.taskTypeId);
 
-      // 篩選具備該任務技能的 worker
+      // 找出符合此任務技能的 worker
       const eligibleWorkers = workers.filter(worker =>
         worker.user_task_types.map(String).includes(taskTypeId)
       );
 
       if (eligibleWorkers.length === 0) continue;
 
-      // 對每位候選 worker 建立負載資訊
+      // 建立 worker 負載清單
       const workerLoadMap = eligibleWorkers.map(worker => {
         const idStr = String(worker._id);
-
-        const actualLoad = activeTasks.filter(t =>
-          String(t.taskData.assignee_id) === idStr
-        ).length;
-
+        const actualLoad = actualWeeklyLoadMap.get(idStr) || 0;
         const simulatedLoad = simulatedLoadMap.get(idStr) || 0;
 
         return {
@@ -516,12 +540,9 @@ router.post('/auto-assign-preview', async (req, res) => {
         };
       });
 
-      // 排序規則：技能越單一越優先 → 總負載越少越優先
+      // 排序：1. 負載少 → 2. 專才優先
       workerLoadMap.sort((a, b) => {
-        if (a.load !== b.load) {
-          return a.load - b.load; // 負載越少越前面
-        }
-        // 如果負載相同，再比較技能單一性
+        if (a.load !== b.load) return a.load - b.load;
         if (a.isSpecialist && !b.isSpecialist) return -1;
         if (!a.isSpecialist && b.isSpecialist) return 1;
         return 0;
@@ -530,13 +551,10 @@ router.post('/auto-assign-preview', async (req, res) => {
       const selected = workerLoadMap[0];
       const selectedIdStr = String(selected.worker._id);
 
-      // 模擬新增任務負載
-      simulatedLoadMap.set(
-        selectedIdStr,
-        simulatedLoadMap.get(selectedIdStr) + 1
-      );
+      // 模擬新增一個任務負載
+      simulatedLoadMap.set(selectedIdStr, simulatedLoadMap.get(selectedIdStr) + 1);
 
-      // 加入 preview 結果
+      // 加入預覽結果
       previewList.push({
         taskId: task._id,
         taskName: task.taskName,
