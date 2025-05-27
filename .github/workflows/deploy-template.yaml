@@ -89,7 +89,7 @@ jobs:
 
             # Navigate to your app directory (adjust path as needed)
             cd ~/app || { echo "❌ App directory not found"; exit 1; }
-
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             # Verify configuration files are synced
             echo "📁 Verifying configuration files"
             ls -la docker-compose.yml
