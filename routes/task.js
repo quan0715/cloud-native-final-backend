@@ -836,6 +836,16 @@ router.patch('/start-next', async (req, res) => {
       return res.status(400).json({ error: '請提供 workerId' });
     }
 
+    // 先檢查是否已有正在進行中的任務
+    const currentTask = await Task.findOne({
+      'taskData.state': 'in-progress',
+      'taskData.assignee_id': workerId
+    });
+
+    if (currentTask) {
+      return res.status(400).json({ error: '該使用者已有進行中的任務，無法啟動新任務' });
+    }
+
     const assignedTasks = await Task.find({
       'taskData.state': 'assigned',
       'taskData.assignee_id': workerId
