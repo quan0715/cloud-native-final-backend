@@ -1012,6 +1012,158 @@ router.get('/draft', async (req, res) => {
 
 /**
  * @swagger
+ * /tasks/load:
+ *   get:
+ *     summary: 查詢所有 worker 的目前負載（assigned / in-progress）
+ *     tags: [Task]
+ *     responses:
+ *       200:
+ *         description: 成功回傳所有 worker 的負載
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   userId:
+ *                     type: string
+ *                   userName:
+ *                     type: string
+ *                   assigned:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         taskId:
+ *                           type: string
+ *                         taskName:
+ *                           type: string
+ *                   inProgress:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         taskId:
+ *                           type: string
+ *                         taskName:
+ *                           type: string
+ */
+router.get('/load', async (req, res) => {
+  try {
+    const workers = await User.find({ userRole: 'worker' });
+
+    const result = [];
+
+    for (const worker of workers) {
+      const tasks = await Task.find({
+        'taskData.assignee_id': worker._id,
+        'taskData.state': { $in: ['assigned', 'in-progress'] }
+      });
+
+      const entry = {
+        userId: worker._id,
+        userName: worker.userName,
+        assigned: [],
+        inProgress: []
+      };
+
+      for (const t of tasks) {
+        const data = {
+          taskId: t._id,
+          taskName: t.taskName
+        };
+        if (t.taskData.state === 'assigned') entry.assigned.push(data);
+        else entry.inProgress.push(data);
+      }
+
+      result.push(entry);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢使用者負載時發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
+ * /tasks/load/{userId}:
+ *   get:
+ *     summary: 查詢指定使用者目前的負載（assigned / in-progress）
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 使用者 ID
+ *     responses:
+ *       200:
+ *         description: 成功回傳該使用者的負載
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 assigned:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       taskId:
+ *                         type: string
+ *                       taskName:
+ *                         type: string
+ *                 inProgress:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       taskId:
+ *                         type: string
+ *                       taskName:
+ *                         type: string
+ *       404:
+ *         description: 找不到使用者
+ */
+router.get('/load/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: '找不到使用者' });
+
+    const tasks = await Task.find({
+      'taskData.assignee_id': userId,
+      'taskData.state': { $in: ['assigned', 'in-progress'] }
+    });
+
+    const result = {
+      assigned: [],
+      inProgress: []
+    };
+
+    for (const t of tasks) {
+      const data = {
+        taskId: t._id,
+        taskName: t.taskName
+      };
+      if (t.taskData.state === 'assigned') result.assigned.push(data);
+      else result.inProgress.push(data);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查詢過程發生錯誤' });
+  }
+});
+
+/**
+ * @swagger
  * /tasks/week-load/{userId}:
  *   get:
  *     summary: 查詢指定使用者本週被指派的任務數量與詳細資訊
@@ -1233,6 +1385,8 @@ router.patch('/:id/update-draft', async (req, res) => {
     res.status(500).json({ error: '更新任務時發生錯誤' });
   }
 });
+
+
 
 
 module.exports = router;
