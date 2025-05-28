@@ -1098,4 +1098,141 @@ router.get('/week-load/:userId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /tasks/{id}/update-draft:
+ *   patch:
+ *     summary: 修改 draft 任務的任務類型與名稱
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: 任務 ID
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               taskTypeId:
+ *                 type: string
+ *                 example: "6649b2aef5a3c3dc7f9e1234"
+ *               taskName:
+ *                 type: string
+ *                 example: "電性測試-002"
+ *     responses:
+ *       200:
+ *         description: 任務已成功更新
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 任務已更新
+ *                 task:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     taskName:
+ *                       type: string
+ *                     taskTypeId:
+ *                       type: string
+ *                     assigner_id:
+ *                       type: string
+ *                       nullable: true
+ *                     taskData:
+ *                       type: object
+ *                       properties:
+ *                         state:
+ *                           type: string
+ *                           enum: [draft, assigned, in-progress, success, fail]
+ *                         assignee_id:
+ *                           type: string
+ *                           nullable: true
+ *                         machine:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                         assignTime:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         startTime:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         endTime:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         message:
+ *                           type: string
+ *                           example: ""
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: 任務狀態非 draft，或資料錯誤
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 任務狀態不是 draft，無法修改
+ *       404:
+ *         description: 找不到任務或任務類型
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到任務
+ */
+router.patch('/:id/update-draft', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { taskTypeId, taskName } = req.body;
+
+    const task = await Task.findById(id);
+    if (!task) return res.status(404).json({ error: '找不到任務' });
+
+    if (task.taskData.state !== 'draft') {
+      return res.status(400).json({ error: '任務狀態不是 draft，無法修改' });
+    }
+
+    if (taskTypeId) {
+      const taskType = await TaskType.findById(taskTypeId);
+      if (!taskType) {
+        return res.status(404).json({ error: '找不到對應的任務類型' });
+      }
+      task.taskTypeId = taskTypeId;
+    }
+
+    if (taskName) {
+      task.taskName = taskName;
+    }
+
+    await task.save();
+    res.status(200).json({ message: '任務已更新', task });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '更新任務時發生錯誤' });
+  }
+});
+
+
 module.exports = router;
