@@ -325,7 +325,8 @@ describe('Task Scheduling and Assignment', () => {
         taskName: '電性測試-001',
         taskData: {
           state: 'in-progress',
-          assignee_id: worker1._id
+          assignee_id: worker1._id,
+          assignTime: new Date()
         }
       });
 
@@ -340,7 +341,7 @@ describe('Task Scheduling and Assignment', () => {
 
       const response = await request(app)
         .post('/tasks/auto-assign-preview');
-
+      console.log(response.body);
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBe(1);
@@ -430,7 +431,8 @@ describe('Task Scheduling and Assignment', () => {
           taskName: `電性測試-00${i}`,
           taskData: {
             state: 'in-progress',
-            assignee_id: specialist._id
+            assignee_id: specialist._id,
+            assignTime: new Date()
           }
         });
       }
@@ -492,7 +494,8 @@ describe('Task Scheduling and Assignment', () => {
         taskName: '電性測試-001',
         taskData: {
           state: 'in-progress',
-          assignee_id: worker1._id
+          assignee_id: worker1._id,
+          assignTime: new Date()
         }
       });
       await Task.create({
@@ -500,7 +503,8 @@ describe('Task Scheduling and Assignment', () => {
         taskName: '電性測試-002',
         taskData: {
           state: 'in-progress',
-          assignee_id: worker1._id
+          assignee_id: worker1._id,
+          assignTime: new Date()
         }
       });
 
@@ -510,7 +514,8 @@ describe('Task Scheduling and Assignment', () => {
         taskName: '電性測試-003',
         taskData: {
           state: 'in-progress',
-          assignee_id: worker2._id
+          assignee_id: worker2._id,
+          assignTime: new Date()
         }
       });
 
