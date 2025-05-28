@@ -628,6 +628,12 @@ router.patch('/auto-assign-confirm', async (req, res) => {
         continue;
       }
 
+      const assignee = await User.findById(assigneeId);
+      if (!assignee || assignee.userRole !== 'worker') {
+        results.push({ taskId, status: 'skipped', reason: 'assignee 不是有效的 worker' });
+        continue;
+      }
+
       task.assigner_id = assignerId;
       task.taskData.assignee_id = assigneeId;
       task.taskData.state = 'assigned';
