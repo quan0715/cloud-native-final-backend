@@ -204,6 +204,23 @@ router.get("/", async (req, res) => {
  *                     type: string
  *                     enum: [admin, leader, worker]
  *                     example: "worker"
+ *                   user_task_types:
+ *                    type: array
+ *                    items:
+ *                     type: object
+ *                     properties:
+ *                      _id:
+ *                        type: string
+ *                        example: "664b1c123456abcdef7890"
+ *                      taskName:
+ *                        type: string
+ *                        example: "電性測試"
+ *                      number_of_machine:
+ *                        type: integer
+ *                        example: 2
+ *                     color:
+ *                        type: string
+ *                        example: "#FF5733"
  *                   assignedTasks:
  *                     type: array
  *                     items:
@@ -276,7 +293,9 @@ router.get("/", async (req, res) => {
  */
 router.get("/with-tasks", async (req, res) => {
     try {
-      const users = await User.find({ userRole: "worker" }).lean();
+      const users = await User.find({ userRole: "worker" })
+        .populate("user_task_types")
+        .lean();
   
       const tasks = await Task.find({
         "taskData.assignee_id": { $ne: null },
@@ -325,6 +344,7 @@ router.get("/with-tasks", async (req, res) => {
           _id: user._id,
           userName: user.userName,
           userRole: user.userRole,
+          user_task_types: user.user_task_types,
           ...taskInfo
         };
       });
