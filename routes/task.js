@@ -249,110 +249,6 @@ router.get("/", async (req, res) => {
 
 /**
  * @swagger
- * /tasks/{id}:
- *   get:
- *     summary: 根據 ID 取得任務詳情
- *     tags: [Task]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 任務 ID
- *     responses:
- *       200:
- *         description: 成功回傳任務資料
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 _id:
- *                   type: string
- *                   example: "665000abcd1234567890abcd"
- *                 taskName:
- *                   type: string
- *                   example: "溫度測試任務"
- *                 taskTypeId:
- *                   type: object
- *                   properties:
- *                     _id:
- *                       type: string
- *                       example: "663defabc999888777666aaa"
- *                     taskName:
- *                       type: string
- *                       example: "溫度測試"
- *                     number_of_machine:
- *                       type: integer
- *                       example: 2
- *                     color:
- *                       type: string
- *                       example: "#FF5733"
- *                 taskData:
- *                   type: object
- *                   properties:
- *                     state:
- *                       type: string
- *                       enum: [draft, assigned, in-progress, success, fail]
- *                       example: "assigned"
- *                     assignee_id:
- *                       type: string
- *                       example: "664c1fabcd1234567890def0"
- *                     machine:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           _id:
- *                             type: string
- *                             example: "663eeeabc9876543210ffff0"
- *                           machineName:
- *                             type: string
- *                             example: "Machine-A1"
- *                     assignTime:
- *                       type: string
- *                       format: date-time
- *                       example: "2025-05-29T12:00:00.000Z"
- *                     startTime:
- *                       type: string
- *                       format: date-time
- *                       example: "2025-05-29T13:00:00.000Z"
- *                     endTime:
- *                       type: string
- *                       format: date-time
- *                       example: "2025-05-29T14:00:00.000Z"
- *                     message:
- *                       type: string
- *                       example: "請優先處理"
- *                 createdAt:
- *                   type: string
- *                   format: date-time
- *                   example: "2025-05-28T15:12:30.123Z"
- *                 updatedAt:
- *                   type: string
- *                   format: date-time
- *                   example: "2025-05-29T08:22:44.456Z"
- *       404:
- *         description: 找不到該任務
- */
-router.get("/:id", async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id)
-      .populate("taskTypeId")
-      .populate("taskData.machine")
-      .lean();
-
-    if (!task) return res.status(404).json({ error: "找不到任務" });
-
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * @swagger
  * /tasks/{id}/complete:
  *   patch:
  *     summary: 完成任務，更新狀態為 success，並可附加訊息
@@ -1691,7 +1587,108 @@ router.patch('/:id/update-draft', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /tasks/{id}:
+ *   get:
+ *     summary: 根據 ID 取得任務詳情
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 任務 ID
+ *     responses:
+ *       200:
+ *         description: 成功回傳任務資料
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "665000abcd1234567890abcd"
+ *                 taskName:
+ *                   type: string
+ *                   example: "溫度測試任務"
+ *                 taskTypeId:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "663defabc999888777666aaa"
+ *                     taskName:
+ *                       type: string
+ *                       example: "溫度測試"
+ *                     number_of_machine:
+ *                       type: integer
+ *                       example: 2
+ *                     color:
+ *                       type: string
+ *                       example: "#FF5733"
+ *                 taskData:
+ *                   type: object
+ *                   properties:
+ *                     state:
+ *                       type: string
+ *                       enum: [draft, assigned, in-progress, success, fail]
+ *                       example: "assigned"
+ *                     assignee_id:
+ *                       type: string
+ *                       example: "664c1fabcd1234567890def0"
+ *                     machine:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             example: "663eeeabc9876543210ffff0"
+ *                           machineName:
+ *                             type: string
+ *                             example: "Machine-A1"
+ *                     assignTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T12:00:00.000Z"
+ *                     startTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T13:00:00.000Z"
+ *                     endTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T14:00:00.000Z"
+ *                     message:
+ *                       type: string
+ *                       example: "請優先處理"
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-05-28T15:12:30.123Z"
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-05-29T08:22:44.456Z"
+ *       404:
+ *         description: 找不到該任務
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate("taskTypeId")
+      .populate("taskData.machine")
+      .lean();
 
+    if (!task) return res.status(404).json({ error: "找不到任務" });
 
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
