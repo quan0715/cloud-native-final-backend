@@ -72,12 +72,12 @@ jobs:
           host: ${{ secrets.deploy_host }}
           username: ${{ secrets.ec2_user }}
           key: ${{ secrets.ec2_ssh_key }}
-          source: "docker-compose.yml,observability/"
+          source: "docker-compose.yml,observability/,nginx/"
           target: "~/app/"
           strip_components: 0
 
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.deploy_host }}
           username: ${{ secrets.ec2_user }}
@@ -85,23 +85,31 @@ jobs:
           script: |
             set -e
             echo "🔑 Logged in as $(whoami) on host $(hostname)"
-            echo "🚀 Starting deployment for image: ${{ inputs.image_name }}:${{ inputs.tag }}"
+            cd ~/app || { echo "❌ App directory ~/app not found"; exit 1; }
 
-            # Navigate to your app directory (adjust path as needed)
-            cd ~/app || { echo "❌ App directory not found"; exit 1; }
-
-            # Verify configuration files are synced
-            echo "📁 Verifying configuration files"
+            echo "🔎 Verifying synced configuration files:"
             ls -la docker-compose.yml
             ls -la observability/
+            ls -la nginx/nginx.conf
 
-            set -e
-            echo "👉 拉${{ inputs.tag }}映像"
+            echo "📝 Setting environment variables for Docker Compose"
+            export BACKEND_IMAGE_NAME=${{ inputs.image_name }}
+            export BACKEND_IMAGE_TAG=${{ inputs.tag }}
+
+            echo "🚀 Bringing services up with Docker Compose (will pull new images as needed)"
             sudo docker compose up --pull always -d --remove-orphans
-            echo "👉 重啟服務（不中斷）"
-            echo "🔄 Pruning Docker images"
-            sudo docker image prune -af
-            echo "👉 重啟 cloudflared，讓新容器立即被代理"
-            sudo systemctl restart cloudflared
 
-            echo "✅ Deployment completed successfully!"
+            echo "🧹 Pruning old Docker images to free up space"
+            sudo docker image prune -af
+
+            if sudo systemctl status cloudflared &> /dev/null; then
+              echo "🔄 Restarting cloudflared service"
+              sudo systemctl restart cloudflared
+            else
+              echo "ℹ️ cloudflared service not found or not active, skipping restart."
+            fi
+
+            echo "📊 Final deployment status:"
+            sudo docker compose ps
+
+            echo "✅ Deployment to EC2 completed successfully!"
