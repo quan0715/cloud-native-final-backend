@@ -249,6 +249,110 @@ router.get("/", async (req, res) => {
 
 /**
  * @swagger
+ * /tasks/{id}:
+ *   get:
+ *     summary: 根據 ID 取得任務詳情
+ *     tags: [Task]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 任務 ID
+ *     responses:
+ *       200:
+ *         description: 成功回傳任務資料
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "665000abcd1234567890abcd"
+ *                 taskName:
+ *                   type: string
+ *                   example: "溫度測試任務"
+ *                 taskTypeId:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "663defabc999888777666aaa"
+ *                     taskName:
+ *                       type: string
+ *                       example: "溫度測試"
+ *                     number_of_machine:
+ *                       type: integer
+ *                       example: 2
+ *                     color:
+ *                       type: string
+ *                       example: "#FF5733"
+ *                 taskData:
+ *                   type: object
+ *                   properties:
+ *                     state:
+ *                       type: string
+ *                       enum: [draft, assigned, in-progress, success, fail]
+ *                       example: "assigned"
+ *                     assignee_id:
+ *                       type: string
+ *                       example: "664c1fabcd1234567890def0"
+ *                     machine:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             example: "663eeeabc9876543210ffff0"
+ *                           machineName:
+ *                             type: string
+ *                             example: "Machine-A1"
+ *                     assignTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T12:00:00.000Z"
+ *                     startTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T13:00:00.000Z"
+ *                     endTime:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-05-29T14:00:00.000Z"
+ *                     message:
+ *                       type: string
+ *                       example: "請優先處理"
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-05-28T15:12:30.123Z"
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-05-29T08:22:44.456Z"
+ *       404:
+ *         description: 找不到該任務
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate("taskTypeId")
+      .populate("taskData.machine")
+      .lean();
+
+    if (!task) return res.status(404).json({ error: "找不到任務" });
+
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
  * /tasks/{id}/complete:
  *   patch:
  *     summary: 完成任務，更新狀態為 success，並可附加訊息
@@ -1028,26 +1132,125 @@ router.get('/draft', async (req, res) => {
  *                 properties:
  *                   userId:
  *                     type: string
+ *                     example: "664c1f..."
  *                   userName:
  *                     type: string
+ *                     example: "worker1"
  *                   assigned:
  *                     type: array
  *                     items:
  *                       type: object
  *                       properties:
- *                         taskId:
+ *                         _id:
  *                           type: string
  *                         taskName:
  *                           type: string
+ *                         taskTypeId:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             taskName:
+ *                               type: string
+ *                               example: "電性測試"
+ *                             number_of_machine:
+ *                               type: integer
+ *                               example: 2
+ *                             color:
+ *                               type: string
+ *                               example: "#FF5733"
+ *                         assigner_id:
+ *                           type: object
+ *                           nullable: true
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             userName:
+ *                               type: string
+ *                         taskData:
+ *                           type: object
+ *                           properties:
+ *                             state:
+ *                               type: string
+ *                               enum: [draft, assigned, in-progress, success, fail]
+ *                             assignee_id:
+ *                               type: string
+ *                             machine:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   _id:
+ *                                     type: string
+ *                                   machineName:
+ *                                     type: string
+ *                             assignTime:
+ *                               type: string
+ *                               format: date-time
+ *                             startTime:
+ *                               type: string
+ *                               format: date-time
+ *                             endTime:
+ *                               type: string
+ *                               format: date-time
+ *                             message:
+ *                               type: string
  *                   inProgress:
  *                     type: array
  *                     items:
  *                       type: object
  *                       properties:
- *                         taskId:
+ *                         _id:
  *                           type: string
  *                         taskName:
  *                           type: string
+ *                         taskTypeId:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             taskName:
+ *                               type: string
+ *                             number_of_machine:
+ *                               type: integer
+ *                             color:
+ *                               type: string
+ *                         assigner_id:
+ *                           type: object
+ *                           nullable: true
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             userName:
+ *                               type: string
+ *                         taskData:
+ *                           type: object
+ *                           properties:
+ *                             state:
+ *                               type: string
+ *                               example: "in-progress"
+ *                             assignee_id:
+ *                               type: string
+ *                             machine:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   _id:
+ *                                     type: string
+ *                                   machineName:
+ *                                     type: string
+ *                             assignTime:
+ *                               type: string
+ *                               format: date-time
+ *                             startTime:
+ *                               type: string
+ *                               format: date-time
+ *                             endTime:
+ *                               type: string
+ *                               format: date-time
+ *                             message:
+ *                               type: string
  */
 router.get('/load', async (req, res) => {
   try {
@@ -1059,7 +1262,11 @@ router.get('/load', async (req, res) => {
       const tasks = await Task.find({
         'taskData.assignee_id': worker._id,
         'taskData.state': { $in: ['assigned', 'in-progress'] }
-      });
+      })
+        .populate('taskTypeId')
+        .populate('taskData.machine')
+        .populate('assigner_id', 'userName')
+        .lean();
 
       const entry = {
         userId: worker._id,
@@ -1069,12 +1276,8 @@ router.get('/load', async (req, res) => {
       };
 
       for (const t of tasks) {
-        const data = {
-          taskId: t._id,
-          taskName: t.taskName
-        };
-        if (t.taskData.state === 'assigned') entry.assigned.push(data);
-        else entry.inProgress.push(data);
+        if (t.taskData.state === 'assigned') entry.assigned.push(t);
+        else entry.inProgress.push(t);
       }
 
       result.push(entry);
@@ -1113,21 +1316,121 @@ router.get('/load', async (req, res) => {
  *                   items:
  *                     type: object
  *                     properties:
- *                       taskId:
+ *                       _id:
  *                         type: string
  *                       taskName:
  *                         type: string
+ *                       taskTypeId:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           taskName:
+ *                             type: string
+ *                           number_of_machine:
+ *                             type: integer
+ *                           color:
+ *                             type: string
+ *                       assigner_id:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                       taskData:
+ *                         type: object
+ *                         properties:
+ *                           state:
+ *                             type: string
+ *                           assignee_id:
+ *                             type: string
+ *                           machine:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                 machineName:
+ *                                   type: string
+ *                           assignTime:
+ *                             type: string
+ *                             format: date-time
+ *                           startTime:
+ *                             type: string
+ *                             format: date-time
+ *                           endTime:
+ *                             type: string
+ *                             format: date-time
+ *                           message:
+ *                             type: string
  *                 inProgress:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
- *                       taskId:
+ *                       _id:
  *                         type: string
  *                       taskName:
  *                         type: string
+ *                       taskTypeId:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           taskName:
+ *                             type: string
+ *                           number_of_machine:
+ *                             type: integer
+ *                           color:
+ *                             type: string
+ *                       assigner_id:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                       taskData:
+ *                         type: object
+ *                         properties:
+ *                           state:
+ *                             type: string
+ *                           assignee_id:
+ *                             type: string
+ *                           machine:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                 machineName:
+ *                                   type: string
+ *                           assignTime:
+ *                             type: string
+ *                             format: date-time
+ *                           startTime:
+ *                             type: string
+ *                             format: date-time
+ *                           endTime:
+ *                             type: string
+ *                             format: date-time
+ *                           message:
+ *                             type: string
  *       404:
  *         description: 找不到使用者
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到使用者
  */
 router.get('/load/:userId', async (req, res) => {
   try {
@@ -1139,7 +1442,10 @@ router.get('/load/:userId', async (req, res) => {
     const tasks = await Task.find({
       'taskData.assignee_id': userId,
       'taskData.state': { $in: ['assigned', 'in-progress'] }
-    });
+    })
+      .populate('taskTypeId')               // 展開任務類型
+      .populate('assigner_id', 'userName')  // 展開指派人，只拿 userName
+      .populate('taskData.machine');        // 展開機台
 
     const result = {
       assigned: [],
@@ -1147,12 +1453,11 @@ router.get('/load/:userId', async (req, res) => {
     };
 
     for (const t of tasks) {
-      const data = {
-        taskId: t._id,
-        taskName: t.taskName
-      };
-      if (t.taskData.state === 'assigned') result.assigned.push(data);
-      else result.inProgress.push(data);
+      if (t.taskData.state === 'assigned') {
+        result.assigned.push(t);
+      } else {
+        result.inProgress.push(t);
+      }
     }
 
     res.status(200).json(result);
