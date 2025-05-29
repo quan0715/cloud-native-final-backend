@@ -97,10 +97,6 @@ jobs:
             ls -la observability/
             ls -la nginx/nginx.conf
 
-            echo "📝 Setting environment variables for Docker Compose"
-            export BACKEND_IMAGE_NAME=${{ inputs.image_name }}
-            export BACKEND_IMAGE_TAG=${{ inputs.tag }}
-
             echo "🚀 Bringing services up with Docker Compose (will pull new images as needed)"
             sudo docker compose up --pull always -d --remove-orphans
 
