@@ -21,7 +21,7 @@ client.collectDefaultMetrics();
 const httpRequestCounter = new client.Counter({
   name: "http_requests_total",
   help: "Total number of HTTP requests",
-  labelNames: ["method", "route", "status"]
+  labelNames: ["method", "route", "status"],
 });
 
 const allowedOrigins = [
@@ -59,7 +59,7 @@ app.use((req, res, next) => {
     httpRequestCounter.inc({
       method: req.method,
       route: req.path,
-      status: res.statusCode
+      status: res.statusCode,
     });
   });
   next();
@@ -87,10 +87,15 @@ app.use("/machines", require("./routes/machine"));
 app.use("/users", require("./routes/user"));
 app.use("/tasks", require("./routes/task"));
 
-app.use("/api-docs", (req, res, next) => {
-  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
-  next();
-}, swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerOptions));
+app.use(
+  "/api-docs",
+  (req, res, next) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    next();
+  },
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, swaggerOptions)
+);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
