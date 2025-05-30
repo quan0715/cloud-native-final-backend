@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const TaskType = require("../models/TaskType");
+const { metrics } = require('../metrics');
 
 /**
  * @swagger
@@ -38,6 +39,7 @@ const TaskType = require("../models/TaskType");
  *         description: 請求錯誤或 taskName 已存在
  */
 router.post("/", async (req, res) => {
+  const { appTaskTypeOperationsTotal } = metrics;
   try {
     const { taskName, number_of_machine } = req.body;
     if (!taskName || typeof number_of_machine !== "number") {
@@ -49,6 +51,7 @@ router.post("/", async (req, res) => {
 
     const taskType = new TaskType({ taskName, number_of_machine });
     await taskType.save();
+    appTaskTypeOperationsTotal.inc({ operation: 'create' });
     res.status(201).json(taskType);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -121,9 +124,11 @@ router.get("/", async (req, res) => {
  *         description: Task Type 不存在
  */
 router.delete("/:id", async (req, res) => {
+  const { appTaskTypeOperationsTotal } = metrics;
   try {
     const deleted = await TaskType.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "TaskType 不存在" });
+    appTaskTypeOperationsTotal.inc({ operation: 'delete' });
     res.json({ message: "刪除成功", deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -160,6 +165,7 @@ router.delete("/:id", async (req, res) => {
  *         description: Task Type 不存在
  */
 router.put("/:id", async (req, res) => {
+  const { appTaskTypeOperationsTotal } = metrics;
   try {
     const { taskName, number_of_machine } = req.body;
     const updated = await TaskType.findByIdAndUpdate(
@@ -168,6 +174,7 @@ router.put("/:id", async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ error: "TaskType 不存在" });
+    appTaskTypeOperationsTotal.inc({ operation: 'update' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

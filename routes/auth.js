@@ -4,6 +4,7 @@ const router = express.Router();
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { metrics } = require('../metrics');
 
 const SECRET = process.env.JWT_SECRET;
 
@@ -49,20 +50,29 @@ const SECRET = process.env.JWT_SECRET;
  */
 router.post('/login', async (req, res) => {
   const { userName, password } = req.body;
+  const { appUserLoginsTotal, appUserLoginFailuresTotal } = metrics;
 
-  const user = await User.findOne({ userName });
-  if (!user) {
-    return res.status(401).json({ message: 'User Not Found' });
+  try {
+    const user = await User.findOne({ userName });
+    if (!user) {
+      appUserLoginFailuresTotal.inc({ reason: 'user_not_found' });
+      return res.status(401).json({ message: 'User Not Found' });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordValidate);
+    if (!valid) {
+      appUserLoginFailuresTotal.inc({ reason: 'password_error' });
+      return res.status(401).json({ message: 'Password Error' });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.userRole }, SECRET, { expiresIn: '1h' });
+    appUserLoginsTotal.inc({ role: user.userRole });
+    res.json({ token, role: user.userRole, message: 'Login Successful!' });
+  } catch (error) {
+    appUserLoginFailuresTotal.inc({ reason: 'server_error' }); 
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
-
-  const valid = await bcrypt.compare(password, user.passwordValidate);
-  if (!valid) {
-    return res.status(401).json({ message: 'Password Error' });
-  }
-
-  const token = jwt.sign({ id: user._id, role: user.userRole }, SECRET, { expiresIn: '1h' });
-
-  res.json({ token, role: user.userRole, message: 'Login Successful!' });
 });
 
 module.exports = router;
