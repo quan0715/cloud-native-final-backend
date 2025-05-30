@@ -207,6 +207,23 @@ router.get("/", async (req, res) => {
  *                     type: string
  *                     enum: [admin, leader, worker]
  *                     example: "worker"
+ *                   user_task_types:
+ *                    type: array
+ *                    items:
+ *                     type: object
+ *                     properties:
+ *                      _id:
+ *                        type: string
+ *                        example: "664b1c123456abcdef7890"
+ *                      taskName:
+ *                        type: string
+ *                        example: "電性測試"
+ *                      number_of_machine:
+ *                        type: integer
+ *                        example: 2
+ *                     color:
+ *                        type: string
+ *                        example: "#FF5733"
  *                   assignedTasks:
  *                     type: array
  *                     items:
@@ -279,7 +296,9 @@ router.get("/", async (req, res) => {
  */
 router.get("/with-tasks", async (req, res) => {
     try {
-      const users = await User.find({ userRole: "worker" }).lean();
+      const users = await User.find({ userRole: "worker" })
+        .populate("user_task_types")
+        .lean();
   
       const tasks = await Task.find({
         "taskData.assignee_id": { $ne: null },
@@ -328,6 +347,7 @@ router.get("/with-tasks", async (req, res) => {
           _id: user._id,
           userName: user.userName,
           userRole: user.userRole,
+          user_task_types: user.user_task_types,
           ...taskInfo
         };
       });
@@ -337,6 +357,188 @@ router.get("/with-tasks", async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+/**
+ * @swagger
+ * /users/with-tasks/{id}:
+ *   get:
+ *     summary: 取得特定使用者與其相關任務（assigned / in-progress / success）
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: 使用者 ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 該使用者與任務資料
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "664c1f..."
+ *                 userName:
+ *                   type: string
+ *                   example: "User1"
+ *                 userRole:
+ *                   type: string
+ *                   enum: [admin, leader, worker]
+ *                   example: "worker"
+ *                 user_task_types:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "665abc1234567890def12345"
+ *                       taskName:
+ *                         type: string
+ *                         example: "電性測試"
+ *                       number_of_machine:
+ *                         type: integer
+ *                         example: 2
+ *                       color:
+ *                         type: string
+ *                         example: "#FF5733"
+ *                 assignedTasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "taskId123"
+ *                       taskName:
+ *                         type: string
+ *                         example: "XD12345"
+ *                       state:
+ *                         type: string
+ *                         enum: [assigned, in-progress, success]
+ *                         example: "assigned"
+ *                       taskType:
+ *                         type: object
+ *                         properties:
+ *                           taskName:
+ *                             type: string
+ *                             example: "溫度測試"
+ *                       machine:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             machineName:
+ *                               type: string
+ *                               example: "Machine1"
+ *                 inProgressTasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "taskId567"
+ *                       taskName:
+ *                         type: string
+ *                         example: "XD67890"
+ *                       state:
+ *                         type: string
+ *                         example: "in-progress"
+ *                       taskType:
+ *                         type: object
+ *                         properties:
+ *                           taskName:
+ *                             type: string
+ *                             example: "溫度測試"
+ *                       machine:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             machineName:
+ *                               type: string
+ *                               example: "Machine2"
+ *                 completedTasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       taskName:
+ *                         type: string
+ *                       state:
+ *                         type: string
+ *                         example: "success"
+ *       404:
+ *         description: 找不到使用者
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: 找不到使用者
+ *       500:
+ *         description: 查詢過程發生錯誤
+ */
+router.get("/with-tasks/:id", async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, userRole: "worker" })
+      .populate("user_task_types")
+      .lean();
+
+    if (!user) return res.status(404).json({ error: "找不到使用者" });
+
+    const tasks = await Task.find({
+      "taskData.assignee_id": user._id,
+      "taskData.state": { $in: ["assigned", "in-progress", "success"] }
+    })
+      .populate("taskTypeId")
+      .populate("taskData.machine")
+      .lean();
+
+    const taskInfo = {
+      assignedTasks: [],
+      inProgressTasks: [],
+      completedTasks: []
+    };
+
+    for (const task of tasks) {
+      const simplifiedTask = {
+        _id: task._id,
+        taskName: task.taskName,
+        state: task.taskData.state,
+        taskType: task.taskTypeId ? { taskName: task.taskTypeId.taskName } : null,
+        machine: task.taskData.machine.map(m => ({ machineName: m.machineName }))
+      };
+
+      if (task.taskData.state === "assigned") {
+        taskInfo.assignedTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "in-progress") {
+        taskInfo.inProgressTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "success") {
+        taskInfo.completedTasks.push(simplifiedTask);
+      }
+    }
+
+    res.json({
+      _id: user._id,
+      userName: user.userName,
+      userRole: user.userRole,
+      user_task_types: user.user_task_types,
+      ...taskInfo
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * @swagger

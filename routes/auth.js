@@ -65,7 +65,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Password Error' });
     }
 
-    const token = jwt.sign({ id: user._id, role: user.userRole }, SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(
+    { id: user._id, role: user.userRole, userName: user.userName },
+    SECRET,
+    { expiresIn: '1h' }
+  );
     appUserLoginsTotal.inc({ role: user.userRole });
     res.json({ token, role: user.userRole, message: 'Login Successful!' });
   } catch (error) {

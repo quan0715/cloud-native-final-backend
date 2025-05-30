@@ -32,6 +32,9 @@ const { metrics } = require('../metrics');
  *               number_of_machine:
  *                 type: integer
  *                 example: 2
+ *               color:
+ *                 type: string
+ *                 example: "#FF5733"
  *     responses:
  *       201:
  *         description: Task Type 建立成功
@@ -41,7 +44,8 @@ const { metrics } = require('../metrics');
 router.post("/", async (req, res) => {
   const { appTaskTypeOperationsTotal } = metrics;
   try {
-    const { taskName, number_of_machine } = req.body;
+    const { taskName, number_of_machine, color } = req.body;
+
     if (!taskName || typeof number_of_machine !== "number") {
       return res.status(400).json({ error: "taskName 與 number_of_machine 為必填" });
     }
@@ -49,7 +53,12 @@ router.post("/", async (req, res) => {
     const exist = await TaskType.findOne({ taskName });
     if (exist) return res.status(400).json({ error: "taskName 已存在" });
 
-    const taskType = new TaskType({ taskName, number_of_machine });
+    const taskType = new TaskType({
+      taskName,
+      number_of_machine,
+      ...(color && { color })
+    });
+
     await taskType.save();
     appTaskTypeOperationsTotal.inc({ operation: 'create' });
     res.status(201).json(taskType);
@@ -156,23 +165,54 @@ router.delete("/:id", async (req, res) => {
  *             properties:
  *               taskName:
  *                 type: string
+ *                 example: 電性測試
  *               number_of_machine:
  *                 type: integer
+ *                 example: 2
+ *               color:
+ *                 type: string
+ *                 example: "#FF5733"
  *     responses:
  *       200:
  *         description: 更新成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 taskName:
+ *                   type: string
+ *                 number_of_machine:
+ *                   type: integer
+ *                 color:
+ *                   type: string
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
  *       404:
  *         description: Task Type 不存在
  */
 router.put("/:id", async (req, res) => {
   const { appTaskTypeOperationsTotal } = metrics;
   try {
-    const { taskName, number_of_machine } = req.body;
+    const { taskName, number_of_machine, color } = req.body;
+
+    const updateFields = {};
+    if (taskName !== undefined) updateFields.taskName = taskName;
+    if (number_of_machine !== undefined) updateFields.number_of_machine = number_of_machine;
+    if (color !== undefined) updateFields.color = color;
+
     const updated = await TaskType.findByIdAndUpdate(
       req.params.id,
-      { taskName, number_of_machine },
+      updateFields,
       { new: true, runValidators: true }
     );
+
     if (!updated) return res.status(404).json({ error: "TaskType 不存在" });
     appTaskTypeOperationsTotal.inc({ operation: 'update' });
     res.json(updated);

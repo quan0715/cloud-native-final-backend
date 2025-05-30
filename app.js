@@ -25,6 +25,7 @@ const allowedOrigins = [
   "https://dev.quan.wtf",
   "https://app.quan.wtf",
   "https://api-beta.quan.wtf",
+  "https://api.quan.wtf",
 ];
 
 const corsOptions = {
