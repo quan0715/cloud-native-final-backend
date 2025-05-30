@@ -367,73 +367,76 @@ router.get("/", async (req, res) => {
  *                                     type: string
  */
 router.get("/with-tasks", async (req, res) => {
-    try {
-      const users = await User.find({ userRole: "worker" })
-        .populate("user_task_types")
-        .lean();
-  
-      const tasks = await Task.find({
-        "taskData.assignee_id": { $ne: null },
-        "taskData.state": { $in: ["assigned", "in-progress", "success"] }
-      })
-        .populate("taskTypeId")
-        .populate("taskData.machine")
-        .lean();
-  
-      const userTaskMap = {};
-  
-      for (const task of tasks) {
-        const userId = task.taskData.assignee_id.toString();
-        if (!userTaskMap[userId]) {
-          userTaskMap[userId] = {
-            assignedTasks: [],
-            inProgressTasks: [],
-            completedTasks: []
-          };
-        }
-  
-        const simplifiedTask = {
-          _id: task._id,
-          taskName: task.taskName,
-          taskType: task.taskTypeId,
-          taskData: {
-            ...task.taskData,
-            machine: task.taskData.machine.map(m => ({
-              _id: m._id,
-              machineName: m.machineName
-            }))
-          }
-        };
-  
-        if (task.taskData.state === "assigned") {
-          userTaskMap[userId].assignedTasks.push(simplifiedTask);
-        } else if (task.taskData.state === "in-progress") {
-          userTaskMap[userId].inProgressTasks.push(simplifiedTask);
-        } else if (task.taskData.state === "success") {
-          userTaskMap[userId].completedTasks.push(simplifiedTask);
-        }
-      }
-  
-      const result = users.map(user => {
-        const taskInfo = userTaskMap[user._id.toString()] || {
+  try {
+    const users = await User.find({ userRole: "worker" })
+      .populate("user_task_types")
+      .lean();
+
+    const tasks = await Task.find({
+      "taskData.assignee_id": { $ne: null },
+      "taskData.state": { $in: ["assigned", "in-progress", "success"] }
+    })
+      .populate("taskTypeId")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName")
+      .lean();
+
+    const userTaskMap = {};
+
+    for (const task of tasks) {
+      const userId = task.taskData.assignee_id?._id?.toString() || task.taskData.assignee_id?.toString();
+      if (!userId) continue;
+
+      if (!userTaskMap[userId]) {
+        userTaskMap[userId] = {
           assignedTasks: [],
           inProgressTasks: [],
           completedTasks: []
         };
-        return {
-          _id: user._id,
-          userName: user.userName,
-          userRole: user.userRole,
-          user_task_types: user.user_task_types,
-          ...taskInfo
-        };
-      });
-  
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+      }
+
+      const simplifiedTask = {
+        _id: task._id,
+        taskName: task.taskName,
+        taskTypeId: task.taskTypeId,
+        assigner_id: task.assigner_id,
+        taskData: {
+          ...task.taskData,
+          assignee_id: task.taskData.assignee_id,
+          machine: task.taskData.machine
+        }
+      };
+
+      if (task.taskData.state === "assigned") {
+        userTaskMap[userId].assignedTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "in-progress") {
+        userTaskMap[userId].inProgressTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "success") {
+        userTaskMap[userId].completedTasks.push(simplifiedTask);
+      }
     }
-  });
+
+    const result = users.map(user => {
+      const taskInfo = userTaskMap[user._id.toString()] || {
+        assignedTasks: [],
+        inProgressTasks: [],
+        completedTasks: []
+      };
+      return {
+        _id: user._id,
+        userName: user.userName,
+        userRole: user.userRole,
+        user_task_types: user.user_task_types,
+        ...taskInfo
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * @swagger
@@ -644,7 +647,9 @@ router.get("/with-tasks/:id", async (req, res) => {
       "taskData.state": { $in: ["assigned", "in-progress", "success"] }
     })
       .populate("taskTypeId")
-      .populate("taskData.machine")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName")
       .lean();
 
     const taskInfo = {
@@ -657,13 +662,12 @@ router.get("/with-tasks/:id", async (req, res) => {
       const simplifiedTask = {
         _id: task._id,
         taskName: task.taskName,
-        taskType: task.taskTypeId,
+        taskTypeId: task.taskTypeId,
+        assigner_id: task.assigner_id,
         taskData: {
           ...task.taskData,
-          machine: task.taskData.machine.map(m => ({
-            _id: m._id,
-            machineName: m.machineName
-          }))
+          assignee_id: task.taskData.assignee_id,
+          machine: task.taskData.machine
         }
       };
 
