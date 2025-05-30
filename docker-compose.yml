@@ -48,8 +48,13 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
+<<<<<<< HEAD
       GF_SECURITY_ADMIN_PASSWORD: "quan0715"
       GF_SERVER_ROOT_URL: "https://api.quan.wtf/grafana"
+=======
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_SERVER_ROOT_URL: "http://localhost/grafana"
+>>>>>>> 53b46ad (update nginx setting)
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
 
     depends_on:
