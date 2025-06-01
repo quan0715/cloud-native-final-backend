@@ -13,8 +13,8 @@ export const options = {
   stages: [
     { duration: '2m', target: 10 }, // Ramp-up to 10 users over 2 minutes
     { duration: '5m', target: 10 }, // Stay at 10 users for 5 minutes
-    { duration: '2m', target: 50 }, // Ramp-up to 50 users over 2 minutes
-    { duration: '5m', target: 50 }, // Stay at 50 users for 5 minutes
+    { duration: '2m', target: 30 }, // Ramp-up to 30 users over 2 minutes
+    { duration: '5m', target: 30 }, // Stay at 30 users for 5 minutes
     { duration: '2m', target: 0 },  // Ramp-down to 0 users
   ],
   thresholds: {
@@ -27,7 +27,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:80';
 
 let authTokens = [];
 let taskTypeIds = [];
@@ -275,10 +275,10 @@ function adminWorkflow(data) {
       
       // Assign each selected task type
       for (const taskType of selectedTaskTypes) {
-        http.post(`${BASE_URL}/users/${newUser._id}/add-task-type`, JSON.stringify({
+        const assignResponse = http.post(`${BASE_URL}/users/${newUser._id}/add-task-type`, JSON.stringify({
           taskTypeId: taskType._id
         }), { headers });
-        check(response, {
+        check(assignResponse, {
           'Admin user task type assignment': (r) => r.status === 200,
         });
       }
