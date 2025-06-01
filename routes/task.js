@@ -1206,9 +1206,10 @@ router.get('/load', async (req, res) => {
         'taskData.assignee_id': worker._id,
         'taskData.state': { $in: ['assigned', 'in-progress'] }
       })
-        .populate('taskTypeId')
-        .populate('taskData.machine')
-        .populate('assigner_id', 'userName')
+        .populate("taskTypeId")
+        .populate("assigner_id", "userName")
+        .populate("taskData.assignee_id", "userName")
+        .populate("taskData.machine", "machineName")
         .lean();
 
       const entry = {
@@ -1386,9 +1387,10 @@ router.get('/load/:userId', async (req, res) => {
       'taskData.assignee_id': userId,
       'taskData.state': { $in: ['assigned', 'in-progress'] }
     })
-      .populate('taskTypeId')               // 展開任務類型
-      .populate('assigner_id', 'userName')  // 展開指派人，只拿 userName
-      .populate('taskData.machine');        // 展開機台
+      .populate("taskTypeId")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName");
 
     const result = {
       assigned: [],
@@ -1479,18 +1481,18 @@ router.get('/week-load/:userId', async (req, res) => {
     const tasks = await Task.find({
       'taskData.assignee_id': userId,
       'taskData.assignTime': { $gte: monday, $lte: sunday }
-    });
-
+    })
+    .populate("taskTypeId")
+    .populate("assigner_id", "userName")
+    .populate("taskData.assignee_id", "userName")
+    .populate("taskData.machine", "machineName")
+    .lean();
+    
     const result = {
       count: tasks.length,
-      tasks: tasks.map(task => ({
-        taskId: task._id,
-        taskName: task.taskName,
-        state: task.taskData.state,
-        assignTime: task.taskData.assignTime
-      }))
+      tasks
     };
-
+    
     res.status(200).json(result);
   } catch (err) {
     console.error(err);
@@ -1727,7 +1729,9 @@ router.get("/:id", async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
       .populate("taskTypeId")
-      .populate("taskData.machine")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName")
       .lean();
 
     if (!task) return res.status(404).json({ error: "找不到任務" });

@@ -208,22 +208,22 @@ router.get("/", async (req, res) => {
  *                     enum: [admin, leader, worker]
  *                     example: "worker"
  *                   user_task_types:
- *                    type: array
- *                    items:
- *                     type: object
- *                     properties:
- *                      _id:
- *                        type: string
- *                        example: "664b1c123456abcdef7890"
- *                      taskName:
- *                        type: string
- *                        example: "電性測試"
- *                      number_of_machine:
- *                        type: integer
- *                        example: 2
- *                     color:
- *                        type: string
- *                        example: "#FF5733"
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                           example: "664b1c123456abcdef7890"
+ *                         taskName:
+ *                           type: string
+ *                           example: "電性測試"
+ *                         number_of_machine:
+ *                           type: integer
+ *                           example: 2
+ *                         color:
+ *                           type: string
+ *                           example: "#FF5733"
  *                   assignedTasks:
  *                     type: array
  *                     items:
@@ -231,28 +231,47 @@ router.get("/", async (req, res) => {
  *                       properties:
  *                         _id:
  *                           type: string
- *                           example: "taskId123"
  *                         taskName:
  *                           type: string
- *                           example: "XD12345"
- *                         state:
- *                           type: string
- *                           enum: [assigned, in-progress, success]
- *                           example: "assigned"
  *                         taskType:
  *                           type: object
  *                           properties:
+ *                             _id:
+ *                               type: string
  *                             taskName:
  *                               type: string
- *                               example: "溫度測試"
- *                         machine:
- *                           type: array
- *                           items:
- *                             type: object
- *                             properties:
- *                               machineName:
- *                                 type: string
- *                                 example: "Machine1"
+ *                             number_of_machine:
+ *                               type: integer
+ *                             color:
+ *                               type: string
+ *                         taskData:
+ *                           type: object
+ *                           properties:
+ *                             state:
+ *                               type: string
+ *                               enum: [assigned, in-progress, success]
+ *                             assignee_id:
+ *                               type: string
+ *                             assignTime:
+ *                               type: string
+ *                               format: date-time
+ *                             startTime:
+ *                               type: string
+ *                               format: date-time
+ *                             endTime:
+ *                               type: string
+ *                               format: date-time
+ *                             message:
+ *                               type: string
+ *                             machine:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   _id:
+ *                                     type: string
+ *                                   machineName:
+ *                                     type: string
  *                   inProgressTasks:
  *                     type: array
  *                     items:
@@ -260,27 +279,47 @@ router.get("/", async (req, res) => {
  *                       properties:
  *                         _id:
  *                           type: string
- *                           example: "taskId567"
  *                         taskName:
  *                           type: string
- *                           example: "XD67890"
- *                         state:
- *                           type: string
- *                           example: "in-progress"
  *                         taskType:
  *                           type: object
  *                           properties:
+ *                             _id:
+ *                               type: string
  *                             taskName:
  *                               type: string
- *                               example: "溫度測試"
- *                         machine:
- *                           type: array
- *                           items:
- *                             type: object
- *                             properties:
- *                               machineName:
- *                                 type: string
- *                                 example: "Machine2"
+ *                             number_of_machine:
+ *                               type: integer
+ *                             color:
+ *                               type: string
+ *                         taskData:
+ *                           type: object
+ *                           properties:
+ *                             state:
+ *                               type: string
+ *                               enum: [assigned, in-progress, success]
+ *                             assignee_id:
+ *                               type: string
+ *                             assignTime:
+ *                               type: string
+ *                               format: date-time
+ *                             startTime:
+ *                               type: string
+ *                               format: date-time
+ *                             endTime:
+ *                               type: string
+ *                               format: date-time
+ *                             message:
+ *                               type: string
+ *                             machine:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   _id:
+ *                                     type: string
+ *                                   machineName:
+ *                                     type: string
  *                   completedTasks:
  *                     type: array
  *                     items:
@@ -290,73 +329,117 @@ router.get("/", async (req, res) => {
  *                           type: string
  *                         taskName:
  *                           type: string
- *                         state:
- *                           type: string
- *                           example: "success"
+ *                         taskType:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             taskName:
+ *                               type: string
+ *                             number_of_machine:
+ *                               type: integer
+ *                             color:
+ *                               type: string
+ *                         taskData:
+ *                           type: object
+ *                           properties:
+ *                             state:
+ *                               type: string
+ *                               enum: [assigned, in-progress, success]
+ *                             assignee_id:
+ *                               type: string
+ *                             assignTime:
+ *                               type: string
+ *                               format: date-time
+ *                             startTime:
+ *                               type: string
+ *                               format: date-time
+ *                             endTime:
+ *                               type: string
+ *                               format: date-time
+ *                             message:
+ *                               type: string
+ *                             machine:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   _id:
+ *                                     type: string
+ *                                   machineName:
+ *                                     type: string
  */
 router.get("/with-tasks", async (req, res) => {
-    try {
-      const users = await User.find({ userRole: "worker" })
-        .populate("user_task_types")
-        .lean();
-  
-      const tasks = await Task.find({
-        "taskData.assignee_id": { $ne: null },
-        "taskData.state": { $in: ["assigned", "in-progress", "success"] }
-      })
-        .populate("taskTypeId")
-        .populate("taskData.machine")
-        .lean();
-  
-      const userTaskMap = {};
-  
-      for (const task of tasks) {
-        const userId = task.taskData.assignee_id.toString();
-        if (!userTaskMap[userId]) {
-          userTaskMap[userId] = {
-            assignedTasks: [],
-            inProgressTasks: [],
-            completedTasks: []
-          };
-        }
-  
-        const simplifiedTask = {
-          _id: task._id,
-          taskName: task.taskName,
-          state: task.taskData.state,
-          taskType: task.taskTypeId ? { taskName: task.taskTypeId.taskName } : null,
-          machine: task.taskData.machine.map(m => ({ machineName: m.machineName }))
-        };
-  
-        if (task.taskData.state === "assigned") {
-          userTaskMap[userId].assignedTasks.push(simplifiedTask);
-        } else if (task.taskData.state === "in-progress") {
-          userTaskMap[userId].inProgressTasks.push(simplifiedTask);
-        } else if (task.taskData.state === "success") {
-          userTaskMap[userId].completedTasks.push(simplifiedTask);
-        }
-      }
-  
-      const result = users.map(user => {
-        const taskInfo = userTaskMap[user._id.toString()] || {
+  try {
+    const users = await User.find({ userRole: "worker" })
+      .populate("user_task_types")
+      .lean();
+
+    const tasks = await Task.find({
+      "taskData.assignee_id": { $ne: null },
+      "taskData.state": { $in: ["assigned", "in-progress", "success"] }
+    })
+      .populate("taskTypeId")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName")
+      .lean();
+
+    const userTaskMap = {};
+
+    for (const task of tasks) {
+      const userId = task.taskData.assignee_id?._id?.toString() || task.taskData.assignee_id?.toString();
+      if (!userId) continue;
+
+      if (!userTaskMap[userId]) {
+        userTaskMap[userId] = {
           assignedTasks: [],
           inProgressTasks: [],
           completedTasks: []
         };
-        return {
-          _id: user._id,
-          userName: user.userName,
-          userRole: user.userRole,
-          user_task_types: user.user_task_types,
-          ...taskInfo
-        };
-      });
-  
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+      }
+
+      const simplifiedTask = {
+        _id: task._id,
+        taskName: task.taskName,
+        taskTypeId: task.taskTypeId,
+        assigner_id: task.assigner_id,
+        taskData: {
+          ...task.taskData,
+          assignee_id: task.taskData.assignee_id,
+          machine: task.taskData.machine
+        }
+      };
+
+      if (task.taskData.state === "assigned") {
+        userTaskMap[userId].assignedTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "in-progress") {
+        userTaskMap[userId].inProgressTasks.push(simplifiedTask);
+      } else if (task.taskData.state === "success") {
+        userTaskMap[userId].completedTasks.push(simplifiedTask);
+      }
     }
-  });
+
+    const result = users.map(user => {
+      const taskInfo = userTaskMap[user._id.toString()] || {
+        assignedTasks: [],
+        inProgressTasks: [],
+        completedTasks: []
+      };
+      return {
+        _id: user._id,
+        userName: user.userName,
+        userRole: user.userRole,
+        user_task_types: user.user_task_types,
+        ...taskInfo
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * @swagger
@@ -381,14 +464,11 @@ router.get("/with-tasks", async (req, res) => {
  *               properties:
  *                 _id:
  *                   type: string
- *                   example: "664c1f..."
  *                 userName:
  *                   type: string
- *                   example: "User1"
  *                 userRole:
  *                   type: string
  *                   enum: [admin, leader, worker]
- *                   example: "worker"
  *                 user_task_types:
  *                   type: array
  *                   items:
@@ -396,16 +476,12 @@ router.get("/with-tasks", async (req, res) => {
  *                     properties:
  *                       _id:
  *                         type: string
- *                         example: "665abc1234567890def12345"
  *                       taskName:
  *                         type: string
- *                         example: "電性測試"
  *                       number_of_machine:
  *                         type: integer
- *                         example: 2
  *                       color:
  *                         type: string
- *                         example: "#FF5733"
  *                 assignedTasks:
  *                   type: array
  *                   items:
@@ -413,28 +489,47 @@ router.get("/with-tasks", async (req, res) => {
  *                     properties:
  *                       _id:
  *                         type: string
- *                         example: "taskId123"
  *                       taskName:
  *                         type: string
- *                         example: "XD12345"
- *                       state:
- *                         type: string
- *                         enum: [assigned, in-progress, success]
- *                         example: "assigned"
  *                       taskType:
  *                         type: object
  *                         properties:
+ *                           _id:
+ *                             type: string
  *                           taskName:
  *                             type: string
- *                             example: "溫度測試"
- *                       machine:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             machineName:
- *                               type: string
- *                               example: "Machine1"
+ *                           number_of_machine:
+ *                             type: integer
+ *                           color:
+ *                             type: string
+ *                       taskData:
+ *                         type: object
+ *                         properties:
+ *                           state:
+ *                             type: string
+ *                             enum: [assigned, in-progress, success]
+ *                           assignee_id:
+ *                             type: string
+ *                           assignTime:
+ *                             type: string
+ *                             format: date-time
+ *                           startTime:
+ *                             type: string
+ *                             format: date-time
+ *                           endTime:
+ *                             type: string
+ *                             format: date-time
+ *                           message:
+ *                             type: string
+ *                           machine:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                 machineName:
+ *                                   type: string
  *                 inProgressTasks:
  *                   type: array
  *                   items:
@@ -442,27 +537,46 @@ router.get("/with-tasks", async (req, res) => {
  *                     properties:
  *                       _id:
  *                         type: string
- *                         example: "taskId567"
  *                       taskName:
  *                         type: string
- *                         example: "XD67890"
- *                       state:
- *                         type: string
- *                         example: "in-progress"
  *                       taskType:
  *                         type: object
  *                         properties:
+ *                           _id:
+ *                             type: string
  *                           taskName:
  *                             type: string
- *                             example: "溫度測試"
- *                       machine:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             machineName:
- *                               type: string
- *                               example: "Machine2"
+ *                           number_of_machine:
+ *                             type: integer
+ *                           color:
+ *                             type: string
+ *                       taskData:
+ *                         type: object
+ *                         properties:
+ *                           state:
+ *                             type: string
+ *                           assignee_id:
+ *                             type: string
+ *                           assignTime:
+ *                             type: string
+ *                             format: date-time
+ *                           startTime:
+ *                             type: string
+ *                             format: date-time
+ *                           endTime:
+ *                             type: string
+ *                             format: date-time
+ *                           message:
+ *                             type: string
+ *                           machine:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                 machineName:
+ *                                   type: string
  *                 completedTasks:
  *                   type: array
  *                   items:
@@ -472,9 +586,44 @@ router.get("/with-tasks", async (req, res) => {
  *                         type: string
  *                       taskName:
  *                         type: string
- *                       state:
- *                         type: string
- *                         example: "success"
+ *                       taskType:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           taskName:
+ *                             type: string
+ *                           number_of_machine:
+ *                             type: integer
+ *                           color:
+ *                             type: string
+ *                       taskData:
+ *                         type: object
+ *                         properties:
+ *                           state:
+ *                             type: string
+ *                           assignee_id:
+ *                             type: string
+ *                           assignTime:
+ *                             type: string
+ *                             format: date-time
+ *                           startTime:
+ *                             type: string
+ *                             format: date-time
+ *                           endTime:
+ *                             type: string
+ *                             format: date-time
+ *                           message:
+ *                             type: string
+ *                           machine:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                 machineName:
+ *                                   type: string
  *       404:
  *         description: 找不到使用者
  *         content:
@@ -501,7 +650,9 @@ router.get("/with-tasks/:id", async (req, res) => {
       "taskData.state": { $in: ["assigned", "in-progress", "success"] }
     })
       .populate("taskTypeId")
-      .populate("taskData.machine")
+      .populate("assigner_id", "userName")
+      .populate("taskData.assignee_id", "userName")
+      .populate("taskData.machine", "machineName")
       .lean();
 
     const taskInfo = {
@@ -514,9 +665,13 @@ router.get("/with-tasks/:id", async (req, res) => {
       const simplifiedTask = {
         _id: task._id,
         taskName: task.taskName,
-        state: task.taskData.state,
-        taskType: task.taskTypeId ? { taskName: task.taskTypeId.taskName } : null,
-        machine: task.taskData.machine.map(m => ({ machineName: m.machineName }))
+        taskTypeId: task.taskTypeId,
+        assigner_id: task.assigner_id,
+        taskData: {
+          ...task.taskData,
+          assignee_id: task.taskData.assignee_id,
+          machine: task.taskData.machine
+        }
       };
 
       if (task.taskData.state === "assigned") {

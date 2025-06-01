@@ -96,7 +96,7 @@ jobs:
             ls -la docker-compose.yml
             ls -la observability/
             ls -la nginx/nginx.conf
-
+            sudo docker compose down
             echo "🚀 Bringing services up with Docker Compose (will pull new images as needed)"
             sudo docker compose up --pull always -d --remove-orphans
 
