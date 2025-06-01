@@ -4,6 +4,15 @@ const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
 const User = require("../models/User");
 const Machine = require('../models/Machine'); 
+const { metrics } = require('../metrics');
+
+const {
+  appTasksCreatedTotal,
+  appTasksCurrentState,
+  appTasksStateChangedTotal,
+  appTaskAssignmentDurationSeconds,
+  appTaskStartNextAttemptsTotal
+} = metrics;
 
 /**
  * @swagger
@@ -111,6 +120,7 @@ const Machine = require('../models/Machine');
  *         description: 伺服器錯誤
  */
 router.post("/", async (req, res) => {
+    // Metrics are already destructured at the top
     try {
       const { taskTypeId, taskName } = req.body;
   
@@ -139,6 +149,8 @@ router.post("/", async (req, res) => {
       });
   
       await task.save();
+      appTasksCreatedTotal.inc({ task_type_id: taskTypeId });
+      appTasksCurrentState.inc({ state: "draft" });
       res.status(201).json(task);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -304,12 +316,15 @@ router.get("/", async (req, res) => {
  *         description: 找不到任務
  */
 router.patch("/:id/complete", async (req, res) => {
+    // Metrics are already destructured
     try {
       const { id } = req.params;
       const { message } = req.body;
   
       const task = await Task.findById(id);
-      if (!task) return res.status(404).json({ error: "找不到任務" });
+      if (!task) {
+        return res.status(404).json({ error: "找不到任務" });
+      }
   
       if (task.taskData.state !== "in-progress") {
         return res.status(400).json({ error: "任務當前狀態不是 in-progress，無法完成" });
@@ -323,7 +338,9 @@ router.patch("/:id/complete", async (req, res) => {
       }
   
       await task.save();
-  
+      appTasksStateChangedTotal.inc({ task_id: id, previous_state: "in-progress", new_state: "success" });
+      appTasksCurrentState.dec({ state: "in-progress" });
+      appTasksCurrentState.inc({ state: "success" });
       res.json({ message: "任務已成功完成", task });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -404,12 +421,15 @@ router.patch("/:id/complete", async (req, res) => {
  *                   example: 找不到任務
  */
 router.patch("/:id/fail", async (req, res) => {
+    // Metrics are already destructured
     try {
       const { id } = req.params;
       const { message } = req.body;
   
       const task = await Task.findById(id);
-      if (!task) return res.status(404).json({ error: "找不到任務" });
+      if (!task) {
+        return res.status(404).json({ error: "找不到任務" });
+      }
   
       if (task.taskData.state !== "in-progress") {
         return res.status(400).json({ error: "任務當前狀態不是 in-progress，無法標記為失敗" });
@@ -423,7 +443,9 @@ router.patch("/:id/fail", async (req, res) => {
       }
   
       await task.save();
-  
+      appTasksStateChangedTotal.inc({ task_id: id, previous_state: "in-progress", new_state: "fail" });
+      appTasksCurrentState.dec({ state: "in-progress" });
+      appTasksCurrentState.inc({ state: "fail" });
       res.json({ message: "任務已標記為失敗", task });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -491,6 +513,8 @@ const getWeekRange = () => {
  *                   example: 預覽任務指派失敗
  */
 router.post('/auto-assign-preview', async (req, res) => {
+  // appTaskAssignmentDurationSeconds is destructured
+  const endTimer = appTaskAssignmentDurationSeconds.startTimer({ operation_type: 'preview' });
   try {
     const draftTasks = await Task.find({ 'taskData.state': 'draft' });
     const workers = await User.find({ userRole: 'worker' });
@@ -569,6 +593,8 @@ router.post('/auto-assign-preview', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '預覽任務指派失敗' });
+  } finally {
+    endTimer();
   }
 });
 
@@ -612,6 +638,8 @@ router.post('/auto-assign-preview', async (req, res) => {
  *         description: 伺服器錯誤
  */
 router.patch('/auto-assign-confirm', async (req, res) => {
+  // Metrics are destructured
+  const endTimer = appTaskAssignmentDurationSeconds.startTimer({ operation_type: 'confirm' });
   try {
     const { assignerId, assignments } = req.body;
 
@@ -634,11 +662,16 @@ router.patch('/auto-assign-confirm', async (req, res) => {
         continue;
       }
 
+      const previousState = task.taskData.state;
       task.assigner_id = assignerId;
       task.taskData.assignee_id = assigneeId;
       task.taskData.state = 'assigned';
       task.taskData.assignTime = new Date();
       await task.save();
+
+      appTasksStateChangedTotal.inc({ task_id: taskId, previous_state: previousState, new_state: 'assigned' });
+      appTasksCurrentState.dec({ state: previousState });
+      appTasksCurrentState.inc({ state: 'assigned' });
 
       results.push({ taskId, status: 'assigned', assigneeId });
     }
@@ -647,6 +680,8 @@ router.patch('/auto-assign-confirm', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '指派過程發生錯誤' });
+  } finally {
+    endTimer();
   }
 });
 
@@ -696,6 +731,7 @@ router.patch('/auto-assign-confirm', async (req, res) => {
  *                   example: 找不到任務
  */
 router.delete('/:id', async (req, res) => {
+  // appTasksCurrentState is destructured
   try {
     const { id } = req.params;
     const task = await Task.findById(id);
@@ -709,6 +745,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await Task.findByIdAndDelete(id);
+    appTasksCurrentState.dec({ state: "draft" });
     res.json({ message: '任務已刪除' });
   } catch (err) {
     console.error(err);
@@ -836,6 +873,7 @@ router.delete('/:id', async (req, res) => {
  *                   example: 啟動任務時發生錯誤
  */
 router.patch('/start-next', async (req, res) => {
+  // Metrics are destructured
   try {
     const { workerId } = req.body;
     if (!workerId) {
@@ -849,6 +887,7 @@ router.patch('/start-next', async (req, res) => {
     });
 
     if (currentTask) {
+      appTaskStartNextAttemptsTotal.inc({ worker_id: workerId, status: 'failure_already_in_progress' });
       return res.status(400).json({ error: '該使用者已有進行中的任務，無法啟動新任務' });
     }
 
@@ -858,6 +897,7 @@ router.patch('/start-next', async (req, res) => {
     }).populate('taskTypeId');
 
     if (assignedTasks.length === 0) {
+      appTaskStartNextAttemptsTotal.inc({ worker_id: workerId, status: 'failure_no_task' });
       return res.status(400).json({ error: '目前沒有可啟動的任務' });
     }
 
@@ -878,11 +918,16 @@ router.patch('/start-next', async (req, res) => {
       }).limit(requiredMachineCount);
 
       if (availableMachines.length >= requiredMachineCount) {
+        const previousState = task.taskData.state;
         task.taskData.machine = availableMachines.map(m => m._id);
         task.taskData.state = 'in-progress';
         task.taskData.startTime = new Date();
         await task.save();
 
+        appTasksStateChangedTotal.inc({ task_id: task._id.toString(), previous_state: previousState, new_state: 'in-progress' });
+        appTasksCurrentState.dec({ state: previousState });
+        appTasksCurrentState.inc({ state: 'in-progress' });
+        appTaskStartNextAttemptsTotal.inc({ worker_id: workerId, status: 'success' });
         return res.status(200).json({
           message: '任務已成功啟動',
           task
@@ -890,8 +935,10 @@ router.patch('/start-next', async (req, res) => {
       }
     }
 
+    appTaskStartNextAttemptsTotal.inc({ worker_id: workerId, status: 'failure_machine_unavailable' });
     return res.status(400).json({ error: '目前無可啟動的任務（機器不足）' });
   } catch (err) {
+    appTaskStartNextAttemptsTotal.inc({ worker_id: req.body.workerId || 'unknown', status: 'failure_server_error' });
     console.error(err);
     res.status(500).json({ error: '啟動任務時發生錯誤' });
   }
