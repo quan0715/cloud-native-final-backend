@@ -104,4 +104,47 @@ describe('/machines API', () => {
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/找不到/);
   });
+
+
+  it('B.M.1: should handle machine name too short', async () => {
+    const res = await request(app)
+      .post('/machines')
+      .send({ machineName: 'A', machine_task_types: [taskType._id] });
+    expect(res.status).toBe(500);
+  });
+  it('B.M.2: should handle machine name too long', async () => {
+    const longMachineName = 'A'.repeat(51); // 51 characters
+    const res = await request(app)
+      .post('/machines')
+      .send({ machineName: longMachineName, machine_task_types: [taskType._id] });
+    expect(res.status).toBe(500);
+  });
+  it('B.M.3: should return 400 for invalid machine data', async () => {
+    const res = await request(app)
+      .post('/machines')
+      .send({ machineName: '', machine_task_types: [] });
+    expect(res.status).toBe(400);
+  });
+  it('B.M.4: should return 400 for invalid task type reference', async () => {
+    const fakeTaskTypeId = new mongoose.Types.ObjectId();
+    const res = await request(app)
+      .post('/machines')
+      .send({
+        machineName: 'GPU-02',
+        machine_task_types: [fakeTaskTypeId],
+      });
+    expect(res.status).toBe(400);
+  });
+  it('B.M.5: should return 201 for empty task type reference', async () => {
+    const res = await request(app)
+      .post('/machines')
+      .send({
+        machineName: 'GPU-02',
+        machine_task_types: [],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('_id');
+    expect(res.body.machineName).toBe('GPU-02');
+    expect(res.body.machine_task_types).toStrictEqual([]);
+  });
 });
