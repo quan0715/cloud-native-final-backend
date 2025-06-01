@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const client = require("prom-client");
+const { metrics, register } = require("./metrics");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
@@ -16,13 +16,6 @@ const swaggerOptions = {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
-
-client.collectDefaultMetrics();
-const httpRequestCounter = new client.Counter({
-  name: "http_requests_total",
-  help: "Total number of HTTP requests",
-  labelNames: ["method", "route", "status"],
-});
 
 const allowedOrigins = [
   "http://localhost:5173", // 您的前端開發環境 (例如 Vue, React, Angular)
@@ -57,7 +50,8 @@ app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
   res.on("finish", () => {
-    httpRequestCounter.inc({
+
+    metrics.httpRequestCounter.inc({
       method: req.method,
       route: req.path,
       status: res.statusCode,
@@ -67,8 +61,53 @@ app.use((req, res, next) => {
 });
 
 app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", client.register.contentType);
-  res.send(await client.register.metrics());
+  // Update machine status gauge before sending metrics
+  try {
+    const Machine = require("./models/Machine");
+    const Task = require("./models/Task");
+
+    const machines = await Machine.find().lean();
+    const inProgressTasks = await Task.find({ "taskData.state": "in-progress" }).select("taskData.machine").lean();
+    
+    const usedMachineIds = new Set();
+    for (const task of inProgressTasks) {
+      for (const m of task.taskData.machine) {
+        usedMachineIds.add(m.toString());
+      }
+    }
+
+    let idleCount = 0;
+    let inUseCount = 0;
+
+    for (const machine of machines) {
+      if (usedMachineIds.has(machine._id.toString())) {
+        inUseCount++;
+      } else {
+        idleCount++;
+      }
+    }
+    metrics.appMachinesStatus.set({ status: 'in-use' }, inUseCount);
+    metrics.appMachinesStatus.set({ status: 'idle' }, idleCount);
+
+    // Initialize appTasksCurrentState gauge (example, can be expanded)
+    const taskStates = await Task.aggregate([
+      { $group: { _id: "$taskData.state", count: { $sum: 1 } } }
+    ]);
+    // Reset existing labels for appTasksCurrentState before setting new ones
+    // This prevents old states that no longer exist from lingering in the metrics if not explicitly set to 0
+    metrics.appTasksCurrentState.reset(); 
+    taskStates.forEach(stateInfo => {
+      if (stateInfo._id) { // Ensure state is not null/undefined
+        metrics.appTasksCurrentState.set({ state: stateInfo._id }, stateInfo.count);
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating dynamic metrics:", error);
+  }
+
+  res.set("Content-Type", register.contentType);
+  res.send(await register.metrics());
 });
 
 // connect to MongoDB

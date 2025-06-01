@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
 const bcrypt = require("bcrypt");
+const { metrics } = require('../metrics');
 
 /**
  * @swagger
@@ -95,6 +96,7 @@ const bcrypt = require("bcrypt");
  *                   example: "Internal Server Error"
  */
 router.post("/", async (req, res) => {
+  const { appUserManagementOperationsTotal } = metrics;
   try {
     const { userName, password, userRole } = req.body;
     if (!userName || !password || !userRole) {
@@ -107,6 +109,7 @@ router.post("/", async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
     const user = new User({ userName, passwordValidate: hashed, userRole });
     await user.save();
+    appUserManagementOperationsTotal.inc({ operation: 'create' });
     res.status(201).json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -775,6 +778,7 @@ router.get("/with-tasks/:id", async (req, res) => {
  *                   example: "Internal Server Error"
  */
 router.put("/:id", async (req, res) => {
+  const { appUserManagementOperationsTotal } = metrics;
   try {
     const { userName, userRole } = req.body;
     const updated = await User.findByIdAndUpdate(
@@ -783,6 +787,7 @@ router.put("/:id", async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ error: "找不到使用者" });
+    appUserManagementOperationsTotal.inc({ operation: 'update' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -864,9 +869,11 @@ router.put("/:id", async (req, res) => {
  *                   example: Internal Server Error
  */
 router.delete("/:id", async (req, res) => {
+  const { appUserManagementOperationsTotal } = metrics;
   try {
     const deleted = await User.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "找不到使用者" });
+    appUserManagementOperationsTotal.inc({ operation: 'delete' });
     res.json({ message: "刪除成功", deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -970,6 +977,7 @@ router.delete("/:id", async (req, res) => {
  *                   example: Internal Server Error
  */
 router.post("/:id/add-task-type", async (req, res) => {
+    const { appUserManagementOperationsTotal } = metrics;
     try {
       const { id } = req.params;
       const { taskTypeId } = req.body;
@@ -991,7 +999,7 @@ router.post("/:id/add-task-type", async (req, res) => {
   
       user.user_task_types.push(taskTypeId);
       await user.save();
-  
+      appUserManagementOperationsTotal.inc({ operation: 'add_skill' });
       res.json({ message: "技能新增成功", user });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1095,6 +1103,7 @@ router.post("/:id/add-task-type", async (req, res) => {
  *                   example: Internal Server Error
  */
 router.delete("/:id/remove-task-type", async (req, res) => {
+    const { appUserManagementOperationsTotal } = metrics;
     try {
       const { id } = req.params;
       const { taskTypeId } = req.body;
@@ -1113,7 +1122,7 @@ router.delete("/:id/remove-task-type", async (req, res) => {
   
       user.user_task_types.splice(index, 1);
       await user.save();
-  
+      appUserManagementOperationsTotal.inc({ operation: 'remove_skill' });
       res.json({ message: "技能已成功移除", user });
     } catch (err) {
       res.status(500).json({ error: err.message });

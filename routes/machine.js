@@ -3,6 +3,7 @@ const router = express.Router();
 const Machine = require("../models/Machine");
 const Task = require("../models/Task");
 const TaskType = require("../models/TaskType");
+const { metrics } = require('../metrics');
 
 /**
  * @swagger
@@ -84,6 +85,7 @@ const TaskType = require("../models/TaskType");
  *                   example: "Internal Server Error"
  */
 router.post("/", async (req, res) => {
+  const { appMachineOperationsTotal } = metrics;
   try {
     const { machineName, machine_task_types } = req.body;
 
@@ -105,7 +107,7 @@ router.post("/", async (req, res) => {
 
     const machine = new Machine({ machineName, machine_task_types });
     await machine.save();
-
+    appMachineOperationsTotal.inc({ operation: 'create' });
     res.status(201).json(machine);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -381,6 +383,7 @@ router.get("/:id", async (req, res) => {
  *                   example: "Internal Server Error"
  */
 router.put("/:id", async (req, res) => {
+  const { appMachineOperationsTotal } = metrics;
   try {
     const { machineName, machine_task_types } = req.body;
 
@@ -404,7 +407,7 @@ router.put("/:id", async (req, res) => {
     ).populate("machine_task_types");
 
     if (!updated) return res.status(404).json({ error: "找不到該機器" });
-
+    appMachineOperationsTotal.inc({ operation: 'update' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -480,9 +483,11 @@ router.put("/:id", async (req, res) => {
  *                   example: Internal Server Error
  */
 router.delete("/:id", async (req, res) => {
+  const { appMachineOperationsTotal } = metrics;
   try {
     const deleted = await Machine.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "找不到該機器" });
+    appMachineOperationsTotal.inc({ operation: 'delete' });
     res.json({ message: "刪除成功", deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
