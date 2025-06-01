@@ -4,12 +4,17 @@ const machineSchema = new mongoose.Schema({
   machineName: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    minlength: 2,
+    maxlength: 50,
   },
   machine_task_types: [
     {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'TaskType'
+      ref: 'TaskType',
+      required: true,
+      minlength: 2,
+      maxlength: 50,
     }
   ]
 }, { timestamps: true });
