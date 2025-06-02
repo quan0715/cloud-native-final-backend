@@ -1,19 +1,71 @@
 services:
-  backend:
-    build: .
+  frontend:
+    image: ghcr.io/quan0715/cloud-native-final-frontend:beta
+    container_name: frontend_app
     ports:
-      - "3000:3000"
-    env_file:
-      - .env
+      - "8888:80"
+    depends_on:
+      - backend
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_reverse_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    image: ghcr.io/quan0715/cloud-native-final-backend:beta
+    container_name: backend_app
+    environment:
+      MONGODB_URI: "mongodb://mongo:27017/mini-lab"
+      PORT: "3000"
+      JWT_SECRET: "quan0715"
     depends_on:
       - mongo
+    restart: always
 
   mongo:
-    image: mongo
+    image: mongo:6.0
+    container_name: mongo_db
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    container_name: prometheus_monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: always
+
+  grafana:
+    image: grafana/grafana:10.1.5
+    container_name: grafana_monitoring
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_SERVER_ROOT_URL: "https://api.quan.wtf/grafana"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+
+    depends_on:
+      - prometheus
+    restart: always
 
 volumes:
   mongo_data:
+  prometheus_data:
+  grafana_data:

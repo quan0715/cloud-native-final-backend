@@ -63,8 +63,21 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # - name: Sync configuration files to EC2
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.deploy_host }}
+      #     username: ${{ secrets.ec2_user }}
+      #     key: ${{ secrets.ec2_ssh_key }}
+      #     source: "docker-compose.yml,observability/,nginx/"
+      #     target: "~/app/"
+      #     strip_components: 0
+
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.deploy_host }}
           username: ${{ secrets.ec2_user }}
@@ -72,29 +85,32 @@ jobs:
           script: |
             set -e
             echo "🔑 Logged in as $(whoami) on host $(hostname)"
-            echo "🚀 Starting deployment for image: ${{ inputs.image_name }}:${{ inputs.tag }}"
+            cd ~/app || { echo "❌ App directory ~/app not found"; exit 1; }
 
-            # Navigate to your app directory on the EC2 instance if docker-compose.yml is not in the home directory
-            # Example: cd /srv/my-app || exit 1
+            # Navigate to your app directory (adjust path as needed)
+            cd ~/app || { echo "❌ App directory not found"; exit 1; }
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Verify configuration files are synced
+            echo "📁 Verifying configuration files"
+            echo "🔎 Verifying synced configuration files:"
+            ls -la docker-compose.yml
+            ls -la observability/
+            ls -la nginx/nginx.conf
+            sudo docker compose down
+            echo "🚀 Bringing services up with Docker Compose (will pull new images as needed)"
+            sudo docker compose up --pull always -d --remove-orphans
 
-            echo "🐳 Pulling Docker image: ${{ inputs.image_name }}:${{ inputs.tag }}"
-            # Ensure your docker-compose.yml on EC2 uses this specific image and tag,
-            # or that it's configured to pick up the latest pulled image for the service.
-            # Using environment variables in docker-compose.yml for the tag is a good practice.
-            sudo docker pull ${{ inputs.image_name }}:${{ inputs.tag }}
-
-            echo "🔄 Restarting services with Docker Compose"
-            # Specify your backend service name if you don't want to restart everything (e.g., database)
-            # Example: sudo docker compose up -d --remove-orphans --force-recreate your_backend_service_name
-            # Assuming docker-compose.yml is in the current directory after cd (if any)
-            # Or provide the full path: sudo docker compose -f /path/to/your/docker-compose.yml up ...
-            sudo docker compose up -d --remove-orphans --force-recreate # Be cautious if this restarts databases
+            echo "🧹 Pruning old Docker images to free up space"
+            sudo docker image prune -af
 
             if sudo systemctl status cloudflared &> /dev/null; then
               echo "🔄 Restarting cloudflared service"
               sudo systemctl restart cloudflared
             else
-              echo "⚠️ cloudflared service not found or not active, skipping restart."
+              echo "ℹ️ cloudflared service not found or not active, skipping restart."
             fi
 
-            echo "✅ Deployment finished successfully!"
+            echo "📊 Final deployment status:"
+            sudo docker compose ps
+
+            echo "✅ Deployment to EC2 completed successfully!"

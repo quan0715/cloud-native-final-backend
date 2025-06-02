@@ -1,17 +1,22 @@
 const mongoose = require('mongoose');
 
 const machineSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  type: {
+  machineName: {
     type: String,
-    enum: ['temperature', 'electrical', 'physical'],
-    required: true
+    required: true,
+    unique: true,
+    minlength: 2,
+    maxlength: 50,
   },
-  status: {
-    type: String,
-    enum: ['idle', 'busy'],
-    default: 'idle'
-  }
-});
+  machine_task_types: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaskType',
+      required: true,
+      minlength: 2,
+      maxlength: 50,
+    }
+  ]
+}, { timestamps: true });
 
 module.exports = mongoose.model('Machine', machineSchema);
