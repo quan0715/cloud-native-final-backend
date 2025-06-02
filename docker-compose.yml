@@ -1,4 +1,13 @@
 services:
+  frontend:
+    image: ghcr.io/quan0715/cloud-native-final-frontend:beta
+    container_name: frontend_app
+    ports:
+      - "8888:80"
+    depends_on:
+      - backend
+    restart: always
+
   nginx:
     image: nginx:latest
     container_name: nginx_reverse_proxy

@@ -25,6 +25,7 @@ const allowedOrigins = [
   "https://dev.quan.wtf",
   "https://app.quan.wtf",
   "https://api-beta.quan.wtf",
+  "https://cloud-native-app.quan.wtf",
   "https://api.quan.wtf",
 ];
 
@@ -50,7 +51,6 @@ app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
   res.on("finish", () => {
-
     metrics.httpRequestCounter.inc({
       method: req.method,
       route: req.path,
@@ -67,8 +67,10 @@ app.get("/metrics", async (req, res) => {
     const Task = require("./models/Task");
 
     const machines = await Machine.find().lean();
-    const inProgressTasks = await Task.find({ "taskData.state": "in-progress" }).select("taskData.machine").lean();
-    
+    const inProgressTasks = await Task.find({ "taskData.state": "in-progress" })
+      .select("taskData.machine")
+      .lean();
+
     const usedMachineIds = new Set();
     for (const task of inProgressTasks) {
       for (const m of task.taskData.machine) {
@@ -86,22 +88,25 @@ app.get("/metrics", async (req, res) => {
         idleCount++;
       }
     }
-    metrics.appMachinesStatus.set({ status: 'in-use' }, inUseCount);
-    metrics.appMachinesStatus.set({ status: 'idle' }, idleCount);
+    metrics.appMachinesStatus.set({ status: "in-use" }, inUseCount);
+    metrics.appMachinesStatus.set({ status: "idle" }, idleCount);
 
     // Initialize appTasksCurrentState gauge (example, can be expanded)
     const taskStates = await Task.aggregate([
-      { $group: { _id: "$taskData.state", count: { $sum: 1 } } }
+      { $group: { _id: "$taskData.state", count: { $sum: 1 } } },
     ]);
     // Reset existing labels for appTasksCurrentState before setting new ones
     // This prevents old states that no longer exist from lingering in the metrics if not explicitly set to 0
-    metrics.appTasksCurrentState.reset(); 
-    taskStates.forEach(stateInfo => {
-      if (stateInfo._id) { // Ensure state is not null/undefined
-        metrics.appTasksCurrentState.set({ state: stateInfo._id }, stateInfo.count);
+    metrics.appTasksCurrentState.reset();
+    taskStates.forEach((stateInfo) => {
+      if (stateInfo._id) {
+        // Ensure state is not null/undefined
+        metrics.appTasksCurrentState.set(
+          { state: stateInfo._id },
+          stateInfo.count
+        );
       }
     });
-
   } catch (error) {
     console.error("Error updating dynamic metrics:", error);
   }

@@ -66,15 +66,15 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Sync configuration files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.deploy_host }}
-          username: ${{ secrets.ec2_user }}
-          key: ${{ secrets.ec2_ssh_key }}
-          source: "docker-compose.yml,observability/,nginx/"
-          target: "~/app/"
-          strip_components: 0
+      # - name: Sync configuration files to EC2
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.deploy_host }}
+      #     username: ${{ secrets.ec2_user }}
+      #     key: ${{ secrets.ec2_ssh_key }}
+      #     source: "docker-compose.yml,observability/,nginx/"
+      #     target: "~/app/"
+      #     strip_components: 0
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.2
