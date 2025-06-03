@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import request from 'supertest'
 import app from '../app' // Assuming your Express app is exported from app.js
 const User = require('../models/User');
@@ -100,5 +100,28 @@ describe('Login API', () => {
       expect(response.status).toBe(401)
       expect(response.body.message).toBe('User Not Found')
     })
-  })
-})
+
+    // 模擬 User.findOne 拋錯 → 走到 catch
+    it('should return 500 when User.findOne throws an error', async () => {
+      // Stub User.findOne，讓它拋出一個錯誤
+      const errorMsg = 'Database down'
+      const findOneSpy = vi
+        .spyOn(User, 'findOne')
+        .mockImplementation(() => {
+          throw new Error(errorMsg)
+        })
+
+      // Call endpoint
+      const response = await request(app)
+        .post('/auth/login')
+        .send({ userName: 'worker001', password: '123456' })
+
+      // 驗證回傳狀態與內容
+      expect(response.status).toBe(500)
+      expect(response.body).toEqual({ message: 'Internal Server Error' })
+
+      // 最後記得還原 stub
+      findOneSpy.mockRestore();
+    });
+  });
+});
