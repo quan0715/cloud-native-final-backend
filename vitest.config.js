@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, coverageConfigDefaults } from 'vitest/config'
 
 export default defineConfig({
   test: {
@@ -8,7 +8,8 @@ export default defineConfig({
     globalTeardown: './tests/globalTeardown.js',
     setupFiles: ['./tests/setupFile.js'],
     coverage: {
-      reporter: ['text', 'json-summary', 'json']
+      reporter: ['text', 'json-summary', 'json', 'html'],
+      exclude: [ "load_tests/**", "scripts/**", ...coverageConfigDefaults.exclude]
     },
     fileParallelism: false,
   },
